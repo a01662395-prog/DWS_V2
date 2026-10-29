@@ -138,6 +138,7 @@ code { font-family: var(--mono); font-size: 0.88em; }
  *  3. LAYOUT PRINCIPAL
  * ========================================================================== */
 .app { display: flex; min-height: 100vh; }
+.app[hidden], [hidden] { display: none !important; }
 
 /* ---------------------------- SIDEBAR ---------------------------------- */
 .sidebar {
@@ -761,44 +762,146 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .popover__vacio { padding: 22px 14px; text-align: center; color: var(--texto-baj); font-size: 12px; }
 
 /* ==========================================================================
- *  9. MODAL DE BÓVEDA ZERO-KNOWLEDGE (Staff UI Lock Screen)
+ *  9. PANTALLA DE INICIO ZERO-KNOWLEDGE (Fondo Rojo Institucional FEMSA #9B2C39)
  * ========================================================================== */
-.boveda-modal {
-  position: fixed; inset: 0; z-index: 200;
-  background: rgba(9, 9, 11, 0.78);
-  display: grid; place-items: center; padding: 20px;
-  animation: aparecer 0.16s ease;
+.pantalla-inicio {
+  min-height: 100vh;
+  width: 100%;
+  background-color: #9B2C39;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 32px 32px;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
 }
-.boveda-modal[hidden] { display: none; }
 
-.boveda-caja {
-  width: 100%; max-width: 420px;
+.inicio-contenedor {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: aparecer 0.18s ease;
+}
+
+.inicio-cabecera {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.inicio-logo-fila {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.inicio-femsa-svg {
+  width: 118px;
+  height: auto;
+  color: #FFFFFF;
+  fill: currentColor;
+}
+
+.inicio-separador {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.inicio-producto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+.inicio-producto strong {
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.inicio-producto span {
+  color: rgba(255, 255, 255, 0.78);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
+.inicio-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.inicio-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #FFFFFF;
+  background: rgba(9, 9, 11, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.inicio-tarjeta {
+  width: 100%;
   background: var(--superficie);
-  border: 1px solid var(--borde-fuerte);
-  border-top: 3px solid var(--femsa-600);
+  color: var(--texto);
+  border: 1px solid rgba(9, 9, 11, 0.18);
   border-radius: var(--r-lg);
-  box-shadow: var(--sombra-lg);
-  padding: 24px;
+  box-shadow: 0 20px 36px -12px rgba(9, 9, 11, 0.42);
+  padding: 28px 26px;
 }
 
-.boveda-cab { margin-bottom: 18px; }
-.boveda-marca {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--borde);
+.boveda-cab {
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--borde);
 }
-.boveda-femsa-svg { width: 88px; height: auto; color: var(--femsa-600); fill: currentColor; }
-.boveda-badge {
-  font-family: var(--mono); font-size: 10px; font-weight: 600;
-  letter-spacing: 0.05em; padding: 3px 7px; border-radius: 4px;
-  background: var(--femsa-tinte); color: var(--femsa-600);
+
+.boveda-etiqueta {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--femsa-600);
+  background: var(--femsa-tinte);
   border: 1px solid rgba(155, 44, 57, 0.25);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 8px;
 }
-.boveda-cab h2 { font-size: 16px; font-weight: 600; color: var(--texto); }
-.boveda-cab p { font-size: 12px; color: var(--texto-med); margin-top: 4px; line-height: 1.45; }
 
-.boveda-form { display: grid; gap: 12px; }
-.boveda-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--texto); margin-bottom: 4px; }
-.boveda-input { width: 100%; height: 36px; font-family: var(--mono); font-size: 13px; }
+.boveda-cab h1 {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--texto);
+  letter-spacing: -0.02em;
+}
+
+.boveda-cab p {
+  font-size: 12.5px;
+  color: var(--texto-med);
+  margin-top: 5px;
+  line-height: 1.45;
+}
+
+.boveda-form { display: grid; gap: 14px; }
+.boveda-label { display: block; font-size: 12px; font-weight: 600; color: var(--texto); margin-bottom: 5px; }
+.boveda-input { width: 100%; height: 38px; font-family: var(--mono); font-size: 13px; }
 .boveda-input:focus { border-color: var(--femsa-600); box-shadow: var(--anillo); outline: none; }
 
 .boveda-aviso-zk {
@@ -811,18 +914,73 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .boveda-aviso-zk strong { display: block; color: var(--texto); font-size: 12px; margin-bottom: 2px; }
 
 .boveda-error {
-  padding: 8px 10px; border-radius: var(--r-sm);
+  padding: 9px 11px; border-radius: var(--r-sm);
   background: var(--peligro-fondo); border: 1px solid rgba(220, 38, 38, 0.3);
   color: var(--peligro); font-size: 12px; font-weight: 500;
 }
 
-.boveda-acciones { margin-top: 4px; }
-.boveda-btn-submit { width: 100%; justify-content: center; height: 36px; font-size: 13px; font-weight: 600; }
+.boveda-acciones { margin-top: 2px; }
+.boveda-btn-submit {
+  width: 100%; justify-content: center; height: 38px;
+  font-size: 13px; font-weight: 600;
+}
 
-.boveda-pie {
-  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--borde);
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  font-size: 11.5px; color: var(--texto-baj); text-align: center;
+/* Bloque "¿Eres nuevo?" que desaparece para siempre una vez creada la contraseña */
+.inicio-nuevo-box {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--borde);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inicio-nuevo-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.inicio-nuevo-texto strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--texto);
+}
+.inicio-nuevo-texto span {
+  font-size: 11.5px;
+  color: var(--texto-med);
+}
+
+.inicio-btn-nuevo {
+  flex: none;
+  border-color: var(--femsa-600);
+  color: var(--femsa-600);
+  background: var(--femsa-tinte);
+  font-weight: 600;
+}
+.inicio-btn-nuevo:hover {
+  background: var(--femsa-600);
+  color: #FFFFFF;
+}
+
+.inicio-volver-box {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borde);
+  text-align: center;
+  font-size: 12px;
+}
+
+.inicio-pie {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: rgba(255, 255, 255, 0.78);
+  padding: 0 4px;
 }
 
 @keyframes latido { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }

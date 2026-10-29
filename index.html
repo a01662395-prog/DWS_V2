@@ -50,10 +50,11 @@
 
 <!-- ==========================================================================
      ESTRUCTURA GENERAL: sidebar + barra superior + zona de vistas
+     (Permanece oculta mientras la sesión Zero-Knowledge esté bloqueada)
      ========================================================================== -->
 <a class="salto" href="#contenido">Saltar al contenido</a>
 
-<div class="app">
+<div class="app" id="appContenedor" hidden>
 
   <!-- ------------------------------------------------------------------ -->
   <!-- SIDEBAR COLAPSABLE: en escritorio se pliega a barra de iconos;      -->
@@ -509,56 +510,92 @@
 </div>
 
 <!-- ==========================================================================
-     MODAL DE AUTENTICACIÓN ZERO-KNOWLEDGE (Bóveda Cifrada AES-GCM-256)
-     Bloquea el acceso a los datos hasta que el usuario introduzca su contraseña
-     maestra y derive la CryptoKey en memoria RAM.
+     PANTALLA DE INICIO DEDICADA (Fondo Institucional Rojo FEMSA #9B2C39)
+     Primera vista obligatoria: solicita contraseña o permite registrarse por
+     única vez si aún no existe una bóveda Zero-Knowledge en el equipo.
      ========================================================================== -->
-<div class="boveda-modal" id="modalBoveda" role="dialog" aria-modal="true" aria-labelledby="bovedaTitulo" hidden>
-  <div class="boveda-caja">
-    <div class="boveda-cab">
-      <div class="boveda-marca">
-        <svg class="boveda-femsa-svg" viewBox="0 0 1593 367" aria-label="FEMSA">
+<section class="pantalla-inicio" id="pantallaInicio" aria-labelledby="bovedaTitulo">
+  <div class="inicio-contenedor">
+
+    <!-- Cabecera Institucional sobre fondo Rojo FEMSA -->
+    <header class="inicio-cabecera">
+      <div class="inicio-logo-fila">
+        <svg class="inicio-femsa-svg" viewBox="0 0 1593 367" role="img" aria-label="FEMSA">
           <use href="#logo-femsa"></use>
         </svg>
-        <span class="boveda-badge">ZERO-KNOWLEDGE VAULT</span>
-      </div>
-      <h2 id="bovedaTitulo">Desbloquear Base de Datos Cifrada</h2>
-      <p id="bovedaSubtitulo">Introduce tu contraseña maestra para derivar la clave AES-GCM-256 en memoria RAM.</p>
-    </div>
-
-    <form id="formBoveda" class="boveda-form" novalidate>
-      <label class="boveda-label" for="inputPassBoveda">Contraseña maestra</label>
-      <input type="password" id="inputPassBoveda" class="campo boveda-input" placeholder="Mínimo 6 caracteres…" autocomplete="current-password" required>
-
-      <div id="bloqueConfirmarPass" hidden>
-        <label class="boveda-label" for="inputPassConfirm">Confirmar contraseña maestra</label>
-        <input type="password" id="inputPassConfirm" class="campo boveda-input" placeholder="Repite tu contraseña maestra…" autocomplete="new-password">
-      </div>
-
-      <div class="boveda-aviso-zk" id="avisoZeroKnowledge" hidden>
-        <svg class="ico"><use href="#i-escudo"></use></svg>
-        <div>
-          <strong>Arquitectura Zero-Knowledge</strong>
-          <p>Tu contraseña nunca se guarda en disco. Se utiliza con PBKDF2 (250,000 iteraciones SHA-256) para cifrar tu IndexedDB local con AES-GCM-256. Si olvidas la contraseña, los datos no podrán recuperarse.</p>
+        <span class="inicio-separador" aria-hidden="true"></span>
+        <div class="inicio-producto">
+          <strong>CifraControl</strong>
+          <span>ZERO-KNOWLEDGE SECURITY PORTAL</span>
         </div>
       </div>
+      <div class="inicio-badges">
+        <span class="inicio-chip">AES-GCM-256</span>
+        <span class="inicio-chip">PBKDF2 · 250,000 IT.</span>
+        <span class="inicio-chip">RAM-ONLY KEY</span>
+      </div>
+    </header>
 
-      <p class="boveda-error" id="errorBoveda" role="alert" hidden></p>
+    <!-- Tarjeta Central de Autenticación / Registro Único -->
+    <div class="inicio-tarjeta" id="modalBoveda" data-modo="desbloquear">
+      <div class="boveda-cab">
+        <span class="boveda-etiqueta" id="bovedaEtiqueta">ACCESO AL SISTEMA</span>
+        <h1 id="bovedaTitulo">Ingresa tu contraseña</h1>
+        <p id="bovedaSubtitulo">Introduce tu contraseña maestra para descifrar la base de datos en memoria RAM y acceder al dashboard.</p>
+      </div>
 
-      <div class="boveda-acciones">
-        <button type="submit" class="btn btn--primario boveda-btn-submit" id="btnSubmitBoveda">
-          <svg class="ico"><use href="#i-candado"></use></svg>
-          <span id="txtBtnBoveda">Desbloquear Bóveda</span>
+      <form id="formBoveda" class="boveda-form" novalidate>
+        <div>
+          <label class="boveda-label" id="labelPassBoveda" for="inputPassBoveda">Contraseña de acceso</label>
+          <input type="password" id="inputPassBoveda" class="campo boveda-input" placeholder="Escribe tu contraseña…" autocomplete="current-password" required>
+        </div>
+
+        <div id="bloqueConfirmarPass" hidden>
+          <label class="boveda-label" for="inputPassConfirm">Confirmar nueva contraseña</label>
+          <input type="password" id="inputPassConfirm" class="campo boveda-input" placeholder="Repite tu contraseña…" autocomplete="new-password">
+        </div>
+
+        <div class="boveda-aviso-zk" id="avisoZeroKnowledge" hidden>
+          <svg class="ico"><use href="#i-escudo"></use></svg>
+          <div>
+            <strong>Registro Único · Arquitectura Zero-Knowledge</strong>
+            <p>Tu contraseña nunca se almacena en disco; deriva una clave AES-GCM-256 mediante PBKDF2 (250,000 iteraciones SHA-256). Una vez creada, la opción de usuario nuevo quedará deshabilitada permanentemente.</p>
+          </div>
+        </div>
+
+        <p class="boveda-error" id="errorBoveda" role="alert" hidden></p>
+
+        <div class="boveda-acciones">
+          <button type="submit" class="btn btn--primario boveda-btn-submit" id="btnSubmitBoveda">
+            <svg class="ico"><use href="#i-candado"></use></svg>
+            <span id="txtBtnBoveda">Ingresar al Dashboard</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Bloque "¿Eres nuevo?" -> SOLO visible cuando NO existe ninguna contraseña en IndexedDB -->
+      <div class="inicio-nuevo-box" id="bloqueEresNuevo" hidden>
+        <div class="inicio-nuevo-texto">
+          <strong>¿Eres nuevo en el sistema?</strong>
+          <span>Aún no se ha configurado una contraseña maestra en este equipo.</span>
+        </div>
+        <button type="button" class="btn inicio-btn-nuevo" id="btnIrARegistro">
+          Agregar mi contraseña
         </button>
       </div>
-    </form>
 
-    <div class="boveda-pie" id="pieOlvidoBoveda" hidden>
-      <span>¿Olvidaste tu contraseña maestra?</span>
-      <button type="button" class="enlace" id="btnOlvidoReset">Restablecer bóveda de fábrica (borra los datos)</button>
+      <!-- Botón para volver a "Ingresa tu contraseña" (solo durante el flujo inicial antes de guardar) -->
+      <div class="inicio-volver-box" id="bloqueVolverLogin" hidden>
+        <button type="button" class="enlace" id="btnVolverALogin">← Volver a ingresar contraseña</button>
+      </div>
     </div>
+
+    <footer class="inicio-pie">
+      <span>FEMSA · CifraControl Security Operations</span>
+      <span>Cifrado Local Certificado · Web Crypto API</span>
+    </footer>
   </div>
-</div>
+</section>
 
 <!-- Avisos flotantes -->
 <div class="avisos" id="avisos" aria-live="polite" aria-atomic="false"></div>

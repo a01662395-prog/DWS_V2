@@ -92,8 +92,17 @@ const Vault = (() => {
    * REGISTRO / INICIALIZACIÓN DE BÓVEDA:
    * Crea un salt aleatorio de 16 bytes, deriva la CryptoKey con PBKDF2 (250k iteraciones),
    * cifra el payload testigo con un IV único de 12 bytes y persiste { salt, authIv, authTag }.
+   *
+   * REGLA DE SEGURIDAD DE REGISTRO ÚNICO:
+   * Si ya existe una bóveda configurada en IndexedDB, rechaza el registro para impedir
+   * que alguien sobrescriba o vuelva a usar el flujo de "usuario nuevo".
    */
   async function inicializarBoveda(db, password) {
+    const yaExiste = await existeBoveda(db);
+    if (yaExiste) {
+      throw new Error('Ya existe una contraseña maestra configurada en este equipo. No es posible registrar un nuevo usuario sobre una bóveda activa.');
+    }
+
     if (!password || String(password).length < 6) {
       throw new Error('La contraseña maestra debe tener al menos 6 caracteres.');
     }

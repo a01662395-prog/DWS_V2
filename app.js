@@ -1677,18 +1677,29 @@ function conectarAjustes() {
   }
 }
 
-async function mostrarModalBoveda() {
+async function mostrarModalBoveda(vistaSolicitada = 'desbloquear') {
+  const pantallaInicio = document.getElementById('pantallaInicio');
   const modal = document.getElementById('modalBoveda');
-  if (!modal) return;
+  if (!pantallaInicio || !modal) return;
+
+  // Ocultar por completo el dashboard mientras la sesión esté bloqueada
+  app.hidden = true;
+  pantallaInicio.hidden = false;
 
   const configurada = await DB.tieneBovedaConfigurada();
-  modal.dataset.modo = configurada ? 'desbloquear' : 'crear';
+  // REGLA ESTRICTA: Si ya existe contraseña configurada, jamás se puede activar el modo 'crear'
+  const modo = configurada ? 'desbloquear' : (vistaSolicitada === 'crear' ? 'crear' : 'desbloquear');
+  modal.dataset.modo = modo;
+  modal.dataset.configurada = configurada ? '1' : '0';
 
+  const etiqueta = document.getElementById('bovedaEtiqueta');
   const titulo = document.getElementById('bovedaTitulo');
   const subtitulo = document.getElementById('bovedaSubtitulo');
+  const labelPass = document.getElementById('labelPassBoveda');
   const bloqueConfirmar = document.getElementById('bloqueConfirmarPass');
   const avisoZK = document.getElementById('avisoZeroKnowledge');
-  const pieOlvido = document.getElementById('pieOlvidoBoveda');
+  const bloqueEresNuevo = document.getElementById('bloqueEresNuevo');
+  const bloqueVolverLogin = document.getElementById('bloqueVolverLogin');
   const txtBtn = document.getElementById('txtBtnBoveda');
   const errBox = document.getElementById('errorBoveda');
   const inputPass = document.getElementById('inputPassBoveda');
@@ -1701,27 +1712,38 @@ async function mostrarModalBoveda() {
   if (inputPass) inputPass.value = '';
   if (inputConfirm) inputConfirm.value = '';
 
-  if (configurada) {
-    titulo.textContent = 'Desbloquear Base de Datos Cifrada';
-    subtitulo.textContent = 'Introduce tu contraseña maestra para derivar la clave AES-GCM-256 en memoria RAM.';
-    bloqueConfirmar.hidden = true;
-    avisoZK.hidden = true;
-    pieOlvido.hidden = false;
-    txtBtn.textContent = 'Desbloquear Bóveda';
-  } else {
-    titulo.textContent = 'Crear Bóveda Cifrada Zero-Knowledge';
-    subtitulo.textContent = 'Configura una contraseña maestra para cifrar tu IndexedDB local con AES-GCM-256.';
+  if (modo === 'crear') {
+    // Vista de Nuevo Usuario (solo accesible si configurada === false)
+    if (etiqueta) etiqueta.textContent = 'NUEVO USUARIO · REGISTRO ÚNICO';
+    titulo.textContent = 'Agrega tu contraseña';
+    subtitulo.textContent = 'Crea tu contraseña maestra para cifrar la base de datos con AES-GCM-256 e ingresar al dashboard.';
+    if (labelPass) labelPass.textContent = 'Nueva contraseña maestra';
+    if (inputPass) inputPass.placeholder = 'Mínimo 6 caracteres…';
     bloqueConfirmar.hidden = false;
     avisoZK.hidden = false;
-    pieOlvido.hidden = true;
-    txtBtn.textContent = 'Crear Bóveda y Cifrar BD';
+    if (bloqueEresNuevo) bloqueEresNuevo.hidden = true;
+    if (bloqueVolverLogin) bloqueVolverLogin.hidden = false;
+    txtBtn.textContent = 'Guardar contraseña e ir al Dashboard';
+  } else {
+    // Vista por defecto: Ingresa tu contraseña
+    if (etiqueta) etiqueta.textContent = 'ACCESO AL SISTEMA';
+    titulo.textContent = 'Ingresa tu contraseña';
+    subtitulo.textContent = 'Introduce tu contraseña maestra para descifrar la base de datos en memoria RAM y acceder al dashboard.';
+    if (labelPass) labelPass.textContent = 'Contraseña de acceso';
+    if (inputPass) inputPass.placeholder = 'Escribe tu contraseña…';
+    bloqueConfirmar.hidden = true;
+    avisoZK.hidden = true;
+    // Si ya se configuró una contraseña antes, el bloque "¿Eres nuevo?" desaparece para siempre
+    if (bloqueEresNuevo) bloqueEresNuevo.hidden = configurada;
+    if (bloqueVolverLogin) bloqueVolverLogin.hidden = true;
+    txtBtn.textContent = 'Ingresar al Dashboard';
   }
 
-  modal.hidden = false;
   setTimeout(() => inputPass?.focus(), 60);
 }
 
 function conectarBoveda() {
+  const pantallaInicio = document.getElementById('pantallaInicio');
   const modal = document.getElementById('modalBoveda');
   const form = document.getElementById('formBoveda');
   const inputPass = document.getElementById('inputPassBoveda');
@@ -1730,7 +1752,8 @@ function conectarBoveda() {
   const btnSubmit = document.getElementById('btnSubmitBoveda');
   const txtBtn = document.getElementById('txtBtnBoveda');
   const btnBloquear = document.getElementById('btnBloquearBoveda');
-  const btnOlvido = document.getElementById('btnOlvidoReset');
+  const btnIrARegistro = document.getElementById('btnIrARegistro');
+  const btnVolverALogin = document.getElementById('btnVolverALogin');
 
   const mostrarError = (msg) => {
     if (!errBox) return;
@@ -1744,13 +1767,21 @@ function conectarBoveda() {
     });
   }
 
-  if (btnOlvido) {
-    btnOlvido.addEventListener('click', async () => {
-      if (!confirm('Al no almacenar tu contraseña ni su hash (Zero-Knowledge), la única forma de continuar es borrar la bóveda actual y crear una nueva. ¿Deseas restablecer de fábrica?')) return;
-      await DB.restablecerFabrica();
-      estado.cache = {};
-      avisar('Bóveda restablecida', 'Crea una nueva contraseña maestra para iniciar desde cero.', 'info');
-      await mostrarModalBoveda();
+  if (btnIrARegistro) {
+    btnIrARegistro.addEventListener('click', async () => {
+      const yaExiste = await DB.tieneBovedaConfigurada();
+      if (yaExiste) {
+        await mostrarModalBoveda('desbloquear');
+        mostrarError('Ya existe una contraseña registrada en este equipo. Ingresa tu contraseña actual.');
+        return;
+      }
+      await mostrarModalBoveda('crear');
+    });
+  }
+
+  if (btnVolverALogin) {
+    btnVolverALogin.addEventListener('click', async () => {
+      await mostrarModalBoveda('desbloquear');
     });
   }
 
@@ -1759,9 +1790,26 @@ function conectarBoveda() {
       e.preventDefault();
       if (errBox) errBox.hidden = true;
 
+      const configurada = await DB.tieneBovedaConfigurada();
       const modo = modal.dataset.modo || 'desbloquear';
       const pass = inputPass.value || '';
       const confirmPass = inputConfirm.value || '';
+
+      // Si el usuario intenta "Ingresar" cuando todavía no ha creado contraseña en el equipo:
+      if (modo === 'desbloquear' && !configurada) {
+        await mostrarModalBoveda('crear');
+        if (pass) inputPass.value = pass;
+        mostrarError('Aún no has creado una contraseña en este equipo. Confírmala abajo para registrarte e ir al dashboard.');
+        setTimeout(() => inputConfirm?.focus(), 60);
+        return;
+      }
+
+      // Si por cualquier razón intenta enviar en modo 'crear' pero ya existe contraseña:
+      if (modo === 'crear' && configurada) {
+        await mostrarModalBoveda('desbloquear');
+        mostrarError('Ya existe una contraseña configurada. No se permite volver a registrar un usuario nuevo.');
+        return;
+      }
 
       if (pass.length < 6) {
         mostrarError('La contraseña maestra debe tener al menos 6 caracteres.');
@@ -1780,18 +1828,20 @@ function conectarBoveda() {
       try {
         if (modo === 'crear') {
           await DB.crearBoveda(pass);
-          avisar('Bóveda Zero-Knowledge creada', 'Clave AES-GCM-256 activa en memoria RAM.', 'exito');
+          avisar('Contraseña creada con éxito', 'Bóveda AES-GCM-256 inicializada. Bienvenido al dashboard.', 'exito');
         } else {
           await DB.desbloquearBoveda(pass);
-          avisar('Bóveda desbloqueada', 'Datos descifrados en memoria RAM durante esta sesión.', 'exito');
+          avisar('Sesión iniciada', 'Base de datos descifrada en memoria RAM.', 'exito');
         }
         inputPass.value = '';
         inputConfirm.value = '';
-        modal.hidden = true;
+        if (pantallaInicio) pantallaInicio.hidden = true;
+        app.hidden = false;
+        irA((location.hash || '#/resumen').slice(2), { empujar: false });
         refrescarTodo();
         comprobarSalud();
       } catch (err) {
-        mostrarError(err.message || 'No fue posible desbloquear la bóveda.');
+        mostrarError(err.message || 'No fue posible autenticar en la bóveda.');
       } finally {
         btnSubmit.disabled = false;
         txtBtn.textContent = textoOriginal;
@@ -1802,11 +1852,11 @@ function conectarBoveda() {
   Vault.suscribir(async (evento, detalle) => {
     if (evento === 'LOCKED') {
       estado.cache = {};
-      await mostrarModalBoveda();
+      await mostrarModalBoveda('desbloquear');
       if (detalle === 'INACTIVITY_TIMEOUT') {
         avisar('Sesión bloqueada por inactividad', 'La CryptoKey fue destruida de la memoria RAM tras 15 minutos sin actividad.', 'alerta');
       } else if (detalle === 'MANUAL') {
-        avisar('Bóveda bloqueada', 'La clave criptográfica ha sido eliminada de la memoria RAM.', 'info');
+        avisar('Sesión cerrada', 'Has salido al inicio y la clave en memoria RAM fue destruida.', 'info');
       }
     }
   });
@@ -1836,8 +1886,11 @@ async function iniciar() {
   conectarBoveda();
 
   if (DB.estaBloqueada()) {
-    await mostrarModalBoveda();
+    await mostrarModalBoveda('desbloquear');
   } else {
+    const pantallaInicio = document.getElementById('pantallaInicio');
+    if (pantallaInicio) pantallaInicio.hidden = true;
+    app.hidden = false;
     irA((location.hash || '#/resumen').slice(2), { empujar: false });
     comprobarSalud();
   }
