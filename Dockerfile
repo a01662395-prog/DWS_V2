@@ -12,6 +12,8 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 COPY --chown=node:node server.js index.html app.js db.js pipeline.js manifest.json estilos.css ./
+COPY --chown=node:node security ./security
+COPY --chown=node:node muestras ./muestras
 
 RUN mkdir -p /app/uploads && chown node:node /app/uploads
 

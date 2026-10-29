@@ -110,7 +110,7 @@
       <div class="salud" id="saludSidebar" data-estado="comprobando">
         <span class="salud__punto"></span><span class="salud__txt">Comprobando API…</span>
       </div>
-      <p class="pie__nota">MVP local · sin autenticación</p>
+      <p class="pie__nota">AES-GCM-256 · ZERO-KNOWLEDGE</p>
     </div>
   </aside>
 
@@ -152,7 +152,11 @@
           <svg class="ico ico--oscuro"><use href="#i-luna"></use></svg>
         </button>
 
-        <span class="avatar" title="FEMSA · Sesión Local">FEMSA</span>
+        <button class="btn" id="btnBloquearBoveda" title="Bloquear bóveda y borrar clave en RAM" style="padding:4px 10px;height:28px;font-size:11.5px">
+          <svg class="ico" style="width:14px;height:14px"><use href="#i-candado"></use></svg>Bloquear
+        </button>
+
+        <span class="avatar" title="FEMSA · Bóveda Zero-Knowledge">FEMSA</span>
       </div>
     </header>
 
@@ -488,10 +492,13 @@
           </article>
 
           <article class="tarjeta">
-            <header class="tarjeta__cab"><div><h2>Estado del Motor Local y Pipeline</h2><p>Base de Datos IndexedDB + Python Pyodide Wasm</p></div></header>
+            <header class="tarjeta__cab"><div><h2>Estado Criptográfico y Motor Local</h2><p>Bóveda AES-GCM-256 (PBKDF2 250k it.) + Python Pyodide Wasm</p></div></header>
             <div class="tarjeta__cuerpo">
               <pre class="codigo" id="saludJson">consultando…</pre>
-              <button class="btn" id="btnComprobarSalud"><svg class="ico"><use href="#i-refrescar"></use></svg>Comprobar ahora</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn" id="btnComprobarSalud"><svg class="ico"><use href="#i-refrescar"></use></svg>Comprobar ahora</button>
+                <button class="btn" id="btnRestablecerFabrica" style="color:var(--peligro);border-color:rgba(220,38,38,.3)"><svg class="ico"><use href="#i-basura"></use></svg>Restablecer bóveda de fábrica</button>
+              </div>
             </div>
           </article>
         </div>
@@ -501,9 +508,64 @@
   </div>
 </div>
 
+<!-- ==========================================================================
+     MODAL DE AUTENTICACIÓN ZERO-KNOWLEDGE (Bóveda Cifrada AES-GCM-256)
+     Bloquea el acceso a los datos hasta que el usuario introduzca su contraseña
+     maestra y derive la CryptoKey en memoria RAM.
+     ========================================================================== -->
+<div class="boveda-modal" id="modalBoveda" role="dialog" aria-modal="true" aria-labelledby="bovedaTitulo" hidden>
+  <div class="boveda-caja">
+    <div class="boveda-cab">
+      <div class="boveda-marca">
+        <svg class="boveda-femsa-svg" viewBox="0 0 1593 367" aria-label="FEMSA">
+          <use href="#logo-femsa"></use>
+        </svg>
+        <span class="boveda-badge">ZERO-KNOWLEDGE VAULT</span>
+      </div>
+      <h2 id="bovedaTitulo">Desbloquear Base de Datos Cifrada</h2>
+      <p id="bovedaSubtitulo">Introduce tu contraseña maestra para derivar la clave AES-GCM-256 en memoria RAM.</p>
+    </div>
+
+    <form id="formBoveda" class="boveda-form" novalidate>
+      <label class="boveda-label" for="inputPassBoveda">Contraseña maestra</label>
+      <input type="password" id="inputPassBoveda" class="campo boveda-input" placeholder="Mínimo 6 caracteres…" autocomplete="current-password" required>
+
+      <div id="bloqueConfirmarPass" hidden>
+        <label class="boveda-label" for="inputPassConfirm">Confirmar contraseña maestra</label>
+        <input type="password" id="inputPassConfirm" class="campo boveda-input" placeholder="Repite tu contraseña maestra…" autocomplete="new-password">
+      </div>
+
+      <div class="boveda-aviso-zk" id="avisoZeroKnowledge" hidden>
+        <svg class="ico"><use href="#i-escudo"></use></svg>
+        <div>
+          <strong>Arquitectura Zero-Knowledge</strong>
+          <p>Tu contraseña nunca se guarda en disco. Se utiliza con PBKDF2 (250,000 iteraciones SHA-256) para cifrar tu IndexedDB local con AES-GCM-256. Si olvidas la contraseña, los datos no podrán recuperarse.</p>
+        </div>
+      </div>
+
+      <p class="boveda-error" id="errorBoveda" role="alert" hidden></p>
+
+      <div class="boveda-acciones">
+        <button type="submit" class="btn btn--primario boveda-btn-submit" id="btnSubmitBoveda">
+          <svg class="ico"><use href="#i-candado"></use></svg>
+          <span id="txtBtnBoveda">Desbloquear Bóveda</span>
+        </button>
+      </div>
+    </form>
+
+    <div class="boveda-pie" id="pieOlvidoBoveda" hidden>
+      <span>¿Olvidaste tu contraseña maestra?</span>
+      <button type="button" class="enlace" id="btnOlvidoReset">Restablecer bóveda de fábrica (borra los datos)</button>
+    </div>
+  </div>
+</div>
+
 <!-- Avisos flotantes -->
 <div class="avisos" id="avisos" aria-live="polite" aria-atomic="false"></div>
 
+<script src="security/crypto.js"></script>
+<script src="security/vault.js"></script>
+<script src="security/secure-db.js"></script>
 <script src="db.js"></script>
 <script src="pipeline.js"></script>
 <script src="app.js"></script>

@@ -197,11 +197,14 @@ async function apiLocal(ruta, params = {}) {
 
   switch (ruta) {
     case '/health': {
+      const cripto = await DB.infoCriptografica();
       return {
         status: 'ok',
-        modo: 'Portable Autónoma (IndexedDB + Pyodide Python)',
-        baseDeDatos: 'IndexedDB Local (Persistencia privada por equipo)',
-        registrosCargados: total,
+        modo: 'Zero-Knowledge Vault (Web Crypto API + IndexedDB + Pyodide)',
+        cifrado: cripto.algoritmo,
+        iteracionesPBKDF2: cripto.iteracionesPBKDF2,
+        bovedaDesbloqueadaEnRAM: cripto.desbloqueadaEnRAM,
+        registrosCifrados: total,
         ultimoArchivo: meta ? meta.archivo_origen : 'Ninguno (esperando carga)',
         procesadoEn: meta ? meta.procesado_en : null,
       };
@@ -446,26 +449,26 @@ async function apiLocal(ruta, params = {}) {
         resumen: { operativos: 3, degradados: 0, caidos: 0 },
         filas: [
           {
-            servicio: 'Base de Datos IndexedDB Local',
+            servicio: 'Bóveda Cifrada IndexedDB (AES-GCM-256)',
             estado: 'operativo',
             uptime: 100,
             latencia: 1,
             intentos: 0,
-            hostname: `local://cifracontrol_local_db (${total} registros)`,
+            hostname: `vault://cifracontrol_zk_vault_db (${total} registros cifrados)`,
+          },
+          {
+            servicio: 'Derivación PBKDF2-HMAC-SHA256 (Web Crypto)',
+            estado: 'operativo',
+            uptime: 100,
+            latencia: 2,
+            intentos: 0,
+            hostname: 'crypto.subtle · 250,000 iteraciones · extractable: false',
           },
           {
             servicio: 'Motor Python Pyodide (Wasm)',
             estado: 'operativo',
             uptime: 100,
             latencia: 4,
-            intentos: 0,
-            hostname: 'wasm://python-pandas-pipeline',
-          },
-          {
-            servicio: 'Almacenamiento Aislado por Equipo',
-            estado: 'operativo',
-            uptime: 100,
-            latencia: 1,
             intentos: 0,
             hostname: meta ? `Última carga: ${meta.archivo_origen}` : 'Sin cargas previas (0 registros)',
           },
@@ -741,8 +744,8 @@ async function comprobarSalud() {
   try {
     const d = await apiLocal('/health');
     cajas.forEach((c) => c && (c.dataset.estado = 'ok'));
-    if (textoSidebar) textoSidebar.textContent = `BD Local (${num(d.registrosCargados)} filas)`;
-    if (textoPastilla) textoPastilla.textContent = `BD Local: ${num(d.registrosCargados)} registros`;
+    if (textoSidebar) textoSidebar.textContent = `Bóveda AES-GCM (${num(d.registrosCifrados)} filas)`;
+    if (textoPastilla) textoPastilla.textContent = `AES-GCM-256 · ${num(d.registrosCifrados)} reg.`;
     if (bloque) bloque.textContent = JSON.stringify(d, null, 2);
     return true;
   } catch (error) {
@@ -1620,6 +1623,17 @@ function conectarAjustes() {
 
   document.getElementById('btnComprobarSalud').addEventListener('click', comprobarSalud);
 
+  const btnRestablecerFabrica = document.getElementById('btnRestablecerFabrica');
+  if (btnRestablecerFabrica) {
+    btnRestablecerFabrica.addEventListener('click', async () => {
+      if (!confirm('¿Estás seguro de destruir la bóveda cifrada y todos sus datos? Esta acción no se puede deshacer.')) return;
+      await DB.restablecerFabrica();
+      estado.cache = {};
+      avisar('Bóveda destruida', 'Se han eliminado las sales criptográficas y todos los registros cifrados.', 'alerta');
+      await mostrarModalBoveda();
+    });
+  }
+
   // Exportar e Importar Base de Datos para compartir con compañeros
   const btnExportar = document.getElementById('btnExportarBD');
   const btnImportar = document.getElementById('btnImportarBD');
@@ -1653,7 +1667,7 @@ function conectarAjustes() {
         const json = JSON.parse(texto);
         await DB.importarBackup(json);
         const total = json.datos?.filas?.length || 0;
-        avisar('Base de Datos importada', `Se cargaron ${num(total)} registros en tu equipo.`, 'exito');
+        avisar('Base de Datos importada', `Se cargaron y cifraron ${num(total)} registros con AES-GCM-256.`, 'exito');
         refrescarTodo();
       } catch (err) {
         avisar('Archivo no válido', err.message, 'error');
@@ -1661,6 +1675,141 @@ function conectarAjustes() {
       inputImportar.value = '';
     });
   }
+}
+
+async function mostrarModalBoveda() {
+  const modal = document.getElementById('modalBoveda');
+  if (!modal) return;
+
+  const configurada = await DB.tieneBovedaConfigurada();
+  modal.dataset.modo = configurada ? 'desbloquear' : 'crear';
+
+  const titulo = document.getElementById('bovedaTitulo');
+  const subtitulo = document.getElementById('bovedaSubtitulo');
+  const bloqueConfirmar = document.getElementById('bloqueConfirmarPass');
+  const avisoZK = document.getElementById('avisoZeroKnowledge');
+  const pieOlvido = document.getElementById('pieOlvidoBoveda');
+  const txtBtn = document.getElementById('txtBtnBoveda');
+  const errBox = document.getElementById('errorBoveda');
+  const inputPass = document.getElementById('inputPassBoveda');
+  const inputConfirm = document.getElementById('inputPassConfirm');
+
+  if (errBox) {
+    errBox.hidden = true;
+    errBox.textContent = '';
+  }
+  if (inputPass) inputPass.value = '';
+  if (inputConfirm) inputConfirm.value = '';
+
+  if (configurada) {
+    titulo.textContent = 'Desbloquear Base de Datos Cifrada';
+    subtitulo.textContent = 'Introduce tu contraseña maestra para derivar la clave AES-GCM-256 en memoria RAM.';
+    bloqueConfirmar.hidden = true;
+    avisoZK.hidden = true;
+    pieOlvido.hidden = false;
+    txtBtn.textContent = 'Desbloquear Bóveda';
+  } else {
+    titulo.textContent = 'Crear Bóveda Cifrada Zero-Knowledge';
+    subtitulo.textContent = 'Configura una contraseña maestra para cifrar tu IndexedDB local con AES-GCM-256.';
+    bloqueConfirmar.hidden = false;
+    avisoZK.hidden = false;
+    pieOlvido.hidden = true;
+    txtBtn.textContent = 'Crear Bóveda y Cifrar BD';
+  }
+
+  modal.hidden = false;
+  setTimeout(() => inputPass?.focus(), 60);
+}
+
+function conectarBoveda() {
+  const modal = document.getElementById('modalBoveda');
+  const form = document.getElementById('formBoveda');
+  const inputPass = document.getElementById('inputPassBoveda');
+  const inputConfirm = document.getElementById('inputPassConfirm');
+  const errBox = document.getElementById('errorBoveda');
+  const btnSubmit = document.getElementById('btnSubmitBoveda');
+  const txtBtn = document.getElementById('txtBtnBoveda');
+  const btnBloquear = document.getElementById('btnBloquearBoveda');
+  const btnOlvido = document.getElementById('btnOlvidoReset');
+
+  const mostrarError = (msg) => {
+    if (!errBox) return;
+    errBox.textContent = msg;
+    errBox.hidden = false;
+  };
+
+  if (btnBloquear) {
+    btnBloquear.addEventListener('click', () => {
+      Vault.bloquear('MANUAL');
+    });
+  }
+
+  if (btnOlvido) {
+    btnOlvido.addEventListener('click', async () => {
+      if (!confirm('Al no almacenar tu contraseña ni su hash (Zero-Knowledge), la única forma de continuar es borrar la bóveda actual y crear una nueva. ¿Deseas restablecer de fábrica?')) return;
+      await DB.restablecerFabrica();
+      estado.cache = {};
+      avisar('Bóveda restablecida', 'Crea una nueva contraseña maestra para iniciar desde cero.', 'info');
+      await mostrarModalBoveda();
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errBox) errBox.hidden = true;
+
+      const modo = modal.dataset.modo || 'desbloquear';
+      const pass = inputPass.value || '';
+      const confirmPass = inputConfirm.value || '';
+
+      if (pass.length < 6) {
+        mostrarError('La contraseña maestra debe tener al menos 6 caracteres.');
+        return;
+      }
+
+      if (modo === 'crear' && pass !== confirmPass) {
+        mostrarError('Las contraseñas no coinciden. Verifícalas antes de continuar.');
+        return;
+      }
+
+      const textoOriginal = txtBtn.textContent;
+      btnSubmit.disabled = true;
+      txtBtn.textContent = 'Derivando clave PBKDF2 (250k it.)…';
+
+      try {
+        if (modo === 'crear') {
+          await DB.crearBoveda(pass);
+          avisar('Bóveda Zero-Knowledge creada', 'Clave AES-GCM-256 activa en memoria RAM.', 'exito');
+        } else {
+          await DB.desbloquearBoveda(pass);
+          avisar('Bóveda desbloqueada', 'Datos descifrados en memoria RAM durante esta sesión.', 'exito');
+        }
+        inputPass.value = '';
+        inputConfirm.value = '';
+        modal.hidden = true;
+        refrescarTodo();
+        comprobarSalud();
+      } catch (err) {
+        mostrarError(err.message || 'No fue posible desbloquear la bóveda.');
+      } finally {
+        btnSubmit.disabled = false;
+        txtBtn.textContent = textoOriginal;
+      }
+    });
+  }
+
+  Vault.suscribir(async (evento, detalle) => {
+    if (evento === 'LOCKED') {
+      estado.cache = {};
+      await mostrarModalBoveda();
+      if (detalle === 'INACTIVITY_TIMEOUT') {
+        avisar('Sesión bloqueada por inactividad', 'La CryptoKey fue destruida de la memoria RAM tras 15 minutos sin actividad.', 'alerta');
+      } else if (detalle === 'MANUAL') {
+        avisar('Bóveda bloqueada', 'La clave criptográfica ha sido eliminada de la memoria RAM.', 'info');
+      }
+    }
+  });
 }
 
 function restaurarPreferencias() {
@@ -1684,9 +1833,14 @@ async function iniciar() {
   conectarFiltros();
   conectarCarga();
   conectarAjustes();
+  conectarBoveda();
 
-  irA((location.hash || '#/resumen').slice(2), { empujar: false });
-  comprobarSalud();
+  if (DB.estaBloqueada()) {
+    await mostrarModalBoveda();
+  } else {
+    irA((location.hash || '#/resumen').slice(2), { empujar: false });
+    comprobarSalud();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', iniciar);
