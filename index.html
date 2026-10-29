@@ -379,7 +379,7 @@
               <header class="tarjeta__cab">
                 <div>
                   <h2>Ingesta de hojas de cálculo (Exclusivo Admin)</h2>
-                  <p>Procesamiento con Pipeline de Python (Pyodide) y cifrado directo en IndexedDB</p>
+                  <p>Procesamiento de datos y almacenamiento en tu base de datos local</p>
                 </div>
                 <span class="pastilla pastilla--protegido">ROL: ADMIN</span>
               </header>
@@ -403,7 +403,7 @@
                       <span class="drop__icono"><svg class="ico ico--grande"><use href="#i-nube"></use></svg></span>
                       <p class="drop__titulo">Arrastra tu archivo Excel o CSV aquí</p>
                       <p class="drop__ayuda">o <button type="button" class="enlace" id="btnBuscarArchivo">búscalo en tu equipo</button></p>
-                      <p class="drop__nota">Pasa por el <strong>Pipeline de Python (Partes A y B)</strong> y se cifra con <strong>AES-GCM-256</strong> en tu Base de Datos Local · <code>.xlsx</code> <code>.xls</code> <code>.csv</code> <code>.tsv</code></p>
+                      <p class="drop__nota">Pasa por el procesamiento y se guarda en tu Base de Datos Local · <code>.xlsx</code> <code>.xls</code> <code>.csv</code> <code>.tsv</code></p>
                     </div>
 
                     <!-- Barra de progreso real -->
@@ -431,35 +431,35 @@
               </div>
             </article>
 
-            <!-- Panel de Transferencia Cifrada (.enc.json): Visible para Operador y Administrador -->
+            <!-- Panel de Transferencia de Paquetes -->
             <article class="tarjeta" id="panelCargaPaqueteCifrado" style="margin-top:14px">
               <header class="tarjeta__cab">
                 <div>
-                  <h2>Paquetes de Datos Cifrados (<code>.enc.json</code>)</h2>
-                  <p id="subtituloPaqueteCifrado">Importa o exporta la base de datos cifrada de extremo a extremo con AES-GCM-256</p>
+                  <h2>Paquetes de Datos</h2>
+                  <p id="subtituloPaqueteCifrado">Importa o exporta el archivo de datos protegido para tu panel</p>
                 </div>
-                <span class="pastilla pastilla--info">AES-GCM-256</span>
+                <span class="pastilla pastilla--info">PAQUETES</span>
               </header>
               <div class="tarjeta__cuerpo" style="display:grid;gap:12px">
                 <div class="boveda-aviso-zk" id="avisoSoloOperador" hidden>
                   <svg class="ico"><use href="#i-escudo"></use></svg>
                   <div>
-                    <strong>Modo Operador / Lector Activo</strong>
-                    <p>Tu cuenta tiene privilegios de consulta. La carga de hojas Excel/CSV originales está reservada al Administrador. Para actualizar tu dashboard, importa un paquete cifrado <code>.enc.json</code> o expórtalo con contraseña.</p>
+                    <strong>Modo Operador</strong>
+                    <p>Tu cuenta tiene privilegios de consulta. Para actualizar tu panel, importa un archivo de paquete generado por el Administrador.</p>
                   </div>
                 </div>
 
                 <div>
-                  <label class="boveda-label" for="inputPassTransporteCarga">Contraseña de cifrado / desencriptación del archivo <code>.json</code></label>
-                  <input type="password" id="inputPassTransporteCarga" class="campo boveda-input" placeholder="Mínimo 6 caracteres para cifrar o abrir el paquete .json…">
+                  <label class="boveda-label" for="inputPassTransporteCarga">Contraseña del archivo</label>
+                  <input type="password" id="inputPassTransporteCarga" class="campo boveda-input" placeholder="Contraseña de protección para el archivo .json…">
                 </div>
 
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                   <button type="button" class="btn btn--primario" id="btnImportarPaqueteCarga">
-                    <svg class="ico"><use href="#i-subir"></use></svg>Cargar paquete cifrado (.json)
+                    <svg class="ico"><use href="#i-subir"></use></svg>Cargar paquete (.json)
                   </button>
                   <button type="button" class="btn" id="btnExportarPaqueteCarga">
-                    <svg class="ico"><use href="#i-descargar"></use></svg>Descargar paquete cifrado (.json)
+                    <svg class="ico"><use href="#i-descargar"></use></svg>Descargar paquete (.json)
                   </button>
                 </div>
               </div>
@@ -522,13 +522,13 @@
               </div>
               <div class="fila-set" style="flex-direction:column;align-items:stretch;gap:10px">
                 <div>
-                  <strong>Compartir / Respaldar Base de Datos Cifrada (<code>.enc.json</code>)</strong>
-                  <small style="display:block">El archivo exportado viaja 100% encriptado con AES-GCM-256. Al importarlo se desencripta en RAM y se vuelve a cifrar en tu IndexedDB local.</small>
+                  <strong>Compartir / Respaldar Base de Datos</strong>
+                  <small style="display:block">El archivo exportado se descarga protegido. Al importarlo se carga en tu base de datos local.</small>
                 </div>
-                <input type="password" id="inputPassTransporteAjustes" class="campo boveda-input" placeholder="Contraseña de cifrado del archivo .json (mín. 6 caracteres)…">
+                <input type="password" id="inputPassTransporteAjustes" class="campo boveda-input" placeholder="Contraseña de protección para el archivo .json…">
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button type="button" class="btn btn--primario" id="btnExportarBD"><svg class="ico"><use href="#i-descargar"></use></svg>Exportar BD Cifrada (.json)</button>
-                  <button type="button" class="btn" id="btnImportarBD"><svg class="ico"><use href="#i-subir"></use></svg>Importar BD Cifrada (.json)</button>
+                  <button type="button" class="btn btn--primario" id="btnExportarBD"><svg class="ico"><use href="#i-descargar"></use></svg>Exportar archivo (.json)</button>
+                  <button type="button" class="btn" id="btnImportarBD"><svg class="ico"><use href="#i-subir"></use></svg>Importar archivo (.json)</button>
                   <input type="file" id="inputImportarBD" accept=".json" hidden>
                 </div>
               </div>
@@ -536,12 +536,12 @@
           </article>
 
           <article class="tarjeta">
-            <header class="tarjeta__cab"><div><h2>Estado Criptográfico y Motor Local</h2><p>Bóveda AES-GCM-256 (PBKDF2 250k it.) + Python Pyodide Wasm</p></div></header>
+            <header class="tarjeta__cab"><div><h2>Estado del Motor Local</h2><p>Bóveda local segura y procesamiento en memoria</p></div></header>
             <div class="tarjeta__cuerpo">
               <pre class="codigo" id="saludJson">consultando…</pre>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn" id="btnComprobarSalud"><svg class="ico"><use href="#i-refrescar"></use></svg>Comprobar ahora</button>
-                <button class="btn" id="btnRestablecerFabrica" style="color:var(--peligro);border-color:rgba(220,38,38,.3)"><svg class="ico"><use href="#i-basura"></use></svg>Restablecer bóveda de fábrica</button>
+                <button class="btn" id="btnRestablecerFabrica" style="color:var(--peligro);border-color:rgba(220,38,38,.3)"><svg class="ico"><use href="#i-basura"></use></svg>Restablecer de fábrica</button>
               </div>
             </div>
           </article>
@@ -553,106 +553,97 @@
 </div>
 
 <!-- ==========================================================================
-     PANTALLA DE INICIO DEDICADA (Fondo Institucional Rojo FEMSA #9B2C39)
-     Primera vista obligatoria: solicita contraseña o permite registrarse por
-     única vez si aún no existe una bóveda Zero-Knowledge en el equipo.
+     PANTALLA DE INICIO (Diseño Split: 1/3 Izquierda Formulario, 2/3 Fondo Rojo)
      ========================================================================== -->
 <section class="pantalla-inicio" id="pantallaInicio" aria-labelledby="bovedaTitulo">
-  <div class="inicio-contenedor">
-
-    <!-- Cabecera Institucional sobre fondo Rojo FEMSA -->
-    <header class="inicio-cabecera">
-      <div class="inicio-logo-fila">
-        <svg class="inicio-femsa-svg" viewBox="0 0 1593 367" role="img" aria-label="FEMSA">
+  <!-- Columna Izquierda: Formulario (1/3 pantalla) -->
+  <div class="inicio-panel-izq">
+    <div class="inicio-panel-contenido">
+      <div class="inicio-marca-login">
+        <svg class="inicio-femsa-login-svg" viewBox="0 0 1593 367" role="img" aria-label="FEMSA">
           <use href="#logo-femsa"></use>
         </svg>
-        <span class="inicio-separador" aria-hidden="true"></span>
-        <div class="inicio-producto">
+        <span class="inicio-separador-login" aria-hidden="true"></span>
+        <div class="inicio-producto-login">
           <strong>CifraControl</strong>
-          <span>ZERO-KNOWLEDGE SECURITY PORTAL</span>
+          <span>PORTAL DE ACCESO</span>
         </div>
       </div>
-      <div class="inicio-badges">
-        <span class="inicio-chip">AES-GCM-256</span>
-        <span class="inicio-chip">PBKDF2 · 250,000 IT.</span>
-        <span class="inicio-chip">RAM-ONLY KEY</span>
-      </div>
-    </header>
 
-    <!-- Tarjeta Central de Autenticación / Registro Único -->
-    <div class="inicio-tarjeta" id="modalBoveda" data-modo="desbloquear">
-      <div class="boveda-cab">
-        <span class="boveda-etiqueta" id="bovedaEtiqueta">ACCESO AL SISTEMA</span>
-        <h1 id="bovedaTitulo">Ingresa tu contraseña</h1>
-        <p id="bovedaSubtitulo">Introduce tu contraseña maestra para descifrar la base de datos en memoria RAM y acceder al dashboard.</p>
-      </div>
-
-      <form id="formBoveda" class="boveda-form" novalidate>
-        <div>
-          <label class="boveda-label" id="labelPassBoveda" for="inputPassBoveda">Contraseña de acceso</label>
-          <input type="password" id="inputPassBoveda" class="campo boveda-input" placeholder="Escribe tu contraseña…" autocomplete="current-password" required>
+      <div class="inicio-tarjeta" id="modalBoveda" data-modo="desbloquear">
+        <div class="boveda-cab">
+          <span class="boveda-etiqueta" id="bovedaEtiqueta">ACCESO</span>
+          <h1 id="bovedaTitulo">Ingresa tu contraseña</h1>
+          <p id="bovedaSubtitulo">Introduce tu contraseña para acceder al panel.</p>
         </div>
 
-        <div id="bloqueConfirmarPass" hidden>
-          <div style="margin-bottom:12px">
-            <label class="boveda-label" for="inputPassConfirm">Confirmar nueva contraseña</label>
-            <input type="password" id="inputPassConfirm" class="campo boveda-input" placeholder="Repite tu contraseña…" autocomplete="new-password">
-          </div>
-
-          <div style="margin-bottom:12px">
-            <label class="boveda-label" for="selectRolRegistro">Nivel de privilegios en este equipo</label>
-            <select id="selectRolRegistro" class="campo boveda-input" style="width:100%">
-              <option value="operador" selected>Operador / Lector (Solo importar y exportar .json cifrado)</option>
-              <option value="admin">Administrador (Subir Excel/CSV + Pipeline Python + .json cifrado)</option>
-            </select>
-          </div>
-
-          <div id="bloqueClaveAdmin" hidden>
-            <label class="boveda-label" for="inputClaveAdmin">Clave de licencia de Administrador</label>
-            <input type="password" id="inputClaveAdmin" class="campo boveda-input" placeholder="Introduce la clave maestra de Admin…" autocomplete="off">
-            <small style="display:block;margin-top:4px;font-size:11px;color:var(--texto-baj)">Requerida para habilitar la ingesta de archivos Excel/CSV originales.</small>
-          </div>
-        </div>
-
-        <div class="boveda-aviso-zk" id="avisoZeroKnowledge" hidden>
-          <svg class="ico"><use href="#i-escudo"></use></svg>
+        <form id="formBoveda" class="boveda-form" novalidate>
           <div>
-            <strong>Registro Único · Arquitectura Zero-Knowledge</strong>
-            <p>Tu contraseña nunca se almacena en disco; deriva una clave AES-GCM-256 mediante PBKDF2 (250,000 iteraciones SHA-256). Una vez creada, la opción de usuario nuevo quedará deshabilitada permanentemente.</p>
+            <label class="boveda-label" id="labelPassBoveda" for="inputPassBoveda">Contraseña</label>
+            <input type="password" id="inputPassBoveda" class="campo boveda-input" placeholder="Escribe tu contraseña…" autocomplete="current-password" required>
           </div>
-        </div>
 
-        <p class="boveda-error" id="errorBoveda" role="alert" hidden></p>
+          <div id="bloqueConfirmarPass" hidden>
+            <div style="margin-bottom:12px">
+              <label class="boveda-label" for="inputPassConfirm">Confirmar contraseña</label>
+              <input type="password" id="inputPassConfirm" class="campo boveda-input" placeholder="Repite tu contraseña…" autocomplete="new-password">
+            </div>
 
-        <div class="boveda-acciones">
-          <button type="submit" class="btn btn--primario boveda-btn-submit" id="btnSubmitBoveda">
-            <svg class="ico"><use href="#i-candado"></use></svg>
-            <span id="txtBtnBoveda">Ingresar al Dashboard</span>
+            <div style="margin-bottom:12px">
+              <label class="boveda-label" for="selectRolRegistro">Tipo de cuenta</label>
+              <select id="selectRolRegistro" class="campo boveda-input" style="width:100%">
+                <option value="operador" selected>Operador (Consultar y cargar paquetes)</option>
+                <option value="admin">Administrador (Cargar archivos)</option>
+              </select>
+            </div>
+
+            <div id="bloqueClaveAdmin" hidden>
+              <label class="boveda-label" for="inputClaveAdmin">Clave de administrador</label>
+              <input type="password" id="inputClaveAdmin" class="campo boveda-input" placeholder="Clave de autorización…" autocomplete="off">
+            </div>
+          </div>
+
+          <p class="boveda-error" id="errorBoveda" role="alert" hidden></p>
+
+          <div class="boveda-acciones">
+            <button type="submit" class="btn btn--primario boveda-btn-submit" id="btnSubmitBoveda">
+              <svg class="ico"><use href="#i-candado"></use></svg>
+              <span id="txtBtnBoveda">Ingresar al Dashboard</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Bloque "¿Eres nuevo?" -->
+        <div class="inicio-nuevo-box" id="bloqueEresNuevo" hidden>
+          <div class="inicio-nuevo-texto">
+            <strong>¿Eres nuevo?</strong>
+            <span>Configura tu contraseña en este equipo.</span>
+          </div>
+          <button type="button" class="btn inicio-btn-nuevo" id="btnIrARegistro">
+            Agregar contraseña
           </button>
         </div>
-      </form>
 
-      <!-- Bloque "¿Eres nuevo?" -> SOLO visible cuando NO existe ninguna contraseña en IndexedDB -->
-      <div class="inicio-nuevo-box" id="bloqueEresNuevo" hidden>
-        <div class="inicio-nuevo-texto">
-          <strong>¿Eres nuevo en el sistema?</strong>
-          <span>Aún no se ha configurado una contraseña maestra en este equipo.</span>
+        <!-- Botón para volver a "Ingresa tu contraseña" -->
+        <div class="inicio-volver-box" id="bloqueVolverLogin" hidden>
+          <button type="button" class="enlace" id="btnVolverALogin">← Volver</button>
         </div>
-        <button type="button" class="btn inicio-btn-nuevo" id="btnIrARegistro">
-          Agregar mi contraseña
-        </button>
       </div>
 
-      <!-- Botón para volver a "Ingresa tu contraseña" (solo durante el flujo inicial antes de guardar) -->
-      <div class="inicio-volver-box" id="bloqueVolverLogin" hidden>
-        <button type="button" class="enlace" id="btnVolverALogin">← Volver a ingresar contraseña</button>
-      </div>
+      <footer class="inicio-pie-login">
+        <span>FEMSA · CifraControl</span>
+      </footer>
     </div>
+  </div>
 
-    <footer class="inicio-pie">
-      <span>FEMSA · CifraControl Security Operations</span>
-      <span>Cifrado Local Certificado · Web Crypto API</span>
-    </footer>
+  <!-- Columna Derecha: Fondo Rojo FEMSA liso (2/3 pantalla) -->
+  <div class="inicio-panel-der">
+    <div class="inicio-der-centro">
+      <svg class="inicio-femsa-der-svg" viewBox="0 0 1593 367" role="img" aria-label="FEMSA">
+        <use href="#logo-femsa"></use>
+      </svg>
+      <p class="inicio-der-lema">Plataforma de Monitoreo e Inventario Seguro</p>
+    </div>
   </div>
 </section>
 

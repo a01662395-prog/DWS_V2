@@ -121,7 +121,7 @@ const Vault = (() => {
     if (rolSolicitado === 'admin') {
       const pinIngresado = String(opciones.claveAdmin || '').trim().toUpperCase();
       if (pinIngresado !== CLAVE_LICENCIA_ADMIN) {
-        throw new Error('Clave de licencia de Administrador inválida. Introduce la clave corporativa (FEMSA-ADMIN-2026) o regístrate con rol Operador.');
+        throw new Error('Clave de administrador incorrecta.');
       }
     }
 
@@ -194,7 +194,7 @@ const Vault = (() => {
       rolDescifrado = testigoDescifrado.rol === 'admin' ? 'admin' : 'operador';
     } catch {
       intentosFallidos++;
-      const err = new Error('Contraseña maestra incorrecta. No se pudo descifrar la bóveda.');
+      const err = new Error('Contraseña incorrecta.');
       err.code = 'INVALID_PASSWORD';
       err.intentos = intentosFallidos;
       throw err;

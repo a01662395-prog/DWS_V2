@@ -1813,25 +1813,23 @@ async function mostrarModalBoveda(vistaSolicitada = 'desbloquear') {
 
   if (modo === 'crear') {
     // Vista de Nuevo Usuario (solo accesible si configurada === false)
-    if (etiqueta) etiqueta.textContent = 'NUEVO USUARIO · REGISTRO ÚNICO';
+    if (etiqueta) etiqueta.textContent = 'NUEVO USUARIO';
     titulo.textContent = 'Agrega tu contraseña';
-    subtitulo.textContent = 'Crea tu contraseña maestra para cifrar la base de datos con AES-GCM-256 e ingresar al dashboard.';
-    if (labelPass) labelPass.textContent = 'Nueva contraseña maestra';
+    subtitulo.textContent = 'Crea tu contraseña para acceder al panel.';
+    if (labelPass) labelPass.textContent = 'Nueva contraseña';
     if (inputPass) inputPass.placeholder = 'Mínimo 6 caracteres…';
     bloqueConfirmar.hidden = false;
-    avisoZK.hidden = false;
     if (bloqueEresNuevo) bloqueEresNuevo.hidden = true;
     if (bloqueVolverLogin) bloqueVolverLogin.hidden = false;
-    txtBtn.textContent = 'Guardar contraseña e ir al Dashboard';
+    txtBtn.textContent = 'Guardar contraseña';
   } else {
     // Vista por defecto: Ingresa tu contraseña
-    if (etiqueta) etiqueta.textContent = 'ACCESO AL SISTEMA';
+    if (etiqueta) etiqueta.textContent = 'ACCESO';
     titulo.textContent = 'Ingresa tu contraseña';
-    subtitulo.textContent = 'Introduce tu contraseña maestra para descifrar la base de datos en memoria RAM y acceder al dashboard.';
-    if (labelPass) labelPass.textContent = 'Contraseña de acceso';
+    subtitulo.textContent = 'Introduce tu contraseña para acceder al panel.';
+    if (labelPass) labelPass.textContent = 'Contraseña';
     if (inputPass) inputPass.placeholder = 'Escribe tu contraseña…';
     bloqueConfirmar.hidden = true;
-    avisoZK.hidden = true;
     // Si ya se configuró una contraseña antes, el bloque "¿Eres nuevo?" desaparece para siempre
     if (bloqueEresNuevo) bloqueEresNuevo.hidden = configurada;
     if (bloqueVolverLogin) bloqueVolverLogin.hidden = true;
@@ -1937,21 +1935,21 @@ function conectarBoveda() {
 
       const textoOriginal = txtBtn.textContent;
       btnSubmit.disabled = true;
-      txtBtn.textContent = 'Derivando clave PBKDF2 (250k it.)…';
+      txtBtn.textContent = 'Iniciando sesión…';
 
       try {
         if (modo === 'crear') {
           await DB.crearBoveda(pass, { rol: rolElegido, claveAdmin });
           avisar(
-            `Cuenta creada (${rolElegido === 'admin' ? 'Administrador' : 'Operador'})`,
-            'Bóveda AES-GCM-256 inicializada en memoria RAM.',
+            `Cuenta configurada`,
+            'Bienvenido al dashboard.',
             'exito'
           );
         } else {
           await DB.desbloquearBoveda(pass);
           avisar(
-            `Sesión iniciada (${DB.esAdmin() ? 'Administrador' : 'Operador'})`,
-            'Base de datos descifrada en memoria RAM.',
+            `Sesión iniciada`,
+            'Acceso correcto.',
             'exito'
           );
         }

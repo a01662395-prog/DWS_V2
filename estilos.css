@@ -762,173 +762,135 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .popover__vacio { padding: 22px 14px; text-align: center; color: var(--texto-baj); font-size: 12px; }
 
 /* ==========================================================================
- *  9. PANTALLA DE INICIO ZERO-KNOWLEDGE (Fondo Rojo Institucional FEMSA #9B2C39)
+ *  9. PANTALLA DE INICIO (Split 1/3 Izquierda, 2/3 Derecha Fondo Rojo Liso)
  * ========================================================================== */
 .pantalla-inicio {
   min-height: 100vh;
   width: 100%;
-  background-color: #9B2C39;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: 32px 32px;
-  display: grid;
-  place-items: center;
-  padding: 24px 16px;
+  display: flex;
+  background: #9B2C39; /* Rojo FEMSA liso sin cuadricula */
 }
 
-.inicio-contenedor {
-  width: 100%;
-  max-width: 440px;
+/* Columna Izquierda: 1/3 de la pantalla (o mínimo 420px) */
+.inicio-panel-izq {
+  width: 35%;
+  min-width: 380px;
+  max-width: 500px;
+  background: var(--superficie);
+  color: var(--texto);
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  animation: aparecer 0.18s ease;
-}
-
-.inicio-cabecera {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-}
-
-.inicio-logo-fila {
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 14px;
+  align-items: center;
+  padding: 40px 32px;
+  box-shadow: 12px 0 32px rgba(0, 0, 0, 0.25);
+  z-index: 10;
+  border-right: 1px solid var(--borde);
 }
 
-.inicio-femsa-svg {
-  width: 118px;
+.inicio-panel-contenido {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  animation: aparecer 0.2s ease;
+}
+
+.inicio-marca-login {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.inicio-femsa-login-svg {
+  width: 104px;
   height: auto;
-  color: #FFFFFF;
+  color: var(--femsa-600);
   fill: currentColor;
 }
 
-.inicio-separador {
+.inicio-separador-login {
   width: 1px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.32);
+  height: 24px;
+  background: var(--borde);
 }
 
-.inicio-producto {
+.inicio-producto-login {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
 }
-.inicio-producto strong {
-  color: #FFFFFF;
-  font-size: 15px;
+.inicio-producto-login strong {
+  font-size: 14.5px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  color: var(--texto);
 }
-.inicio-producto span {
-  color: rgba(255, 255, 255, 0.78);
+.inicio-producto-login span {
   font-family: var(--mono);
   font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  margin-top: 2px;
-}
-
-.inicio-badges {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-}
-
-.inicio-chip {
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #FFFFFF;
-  background: rgba(9, 9, 11, 0.24);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  padding: 3px 8px;
-  border-radius: 4px;
+  color: var(--texto-baj);
+  letter-spacing: 0.05em;
 }
 
 .inicio-tarjeta {
   width: 100%;
-  background: var(--superficie);
-  color: var(--texto);
-  border: 1px solid rgba(9, 9, 11, 0.18);
-  border-radius: var(--r-lg);
-  box-shadow: 0 20px 36px -12px rgba(9, 9, 11, 0.42);
-  padding: 28px 26px;
 }
 
 .boveda-cab {
-  margin-bottom: 20px;
-  padding-bottom: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--borde);
 }
 
 .boveda-etiqueta {
   display: inline-block;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--femsa-600);
   background: var(--femsa-tinte);
   border: 1px solid rgba(155, 44, 57, 0.25);
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .boveda-cab h1 {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--texto);
   letter-spacing: -0.02em;
 }
 
 .boveda-cab p {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--texto-med);
-  margin-top: 5px;
-  line-height: 1.45;
+  margin-top: 4px;
 }
 
 .boveda-form { display: grid; gap: 14px; }
-.boveda-label { display: block; font-size: 12px; font-weight: 600; color: var(--texto); margin-bottom: 5px; }
+.boveda-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--texto); margin-bottom: 4px; }
 .boveda-input { width: 100%; height: 38px; font-family: var(--mono); font-size: 13px; }
 .boveda-input:focus { border-color: var(--femsa-600); box-shadow: var(--anillo); outline: none; }
 
-.boveda-aviso-zk {
-  display: flex; gap: 10px; align-items: flex-start;
-  padding: 10px 12px; border-radius: var(--r-sm);
-  background: var(--fondo-alt); border: 1px solid var(--borde);
-  font-size: 11.5px; color: var(--texto-med);
-}
-.boveda-aviso-zk .ico { color: var(--femsa-600); margin-top: 2px; }
-.boveda-aviso-zk strong { display: block; color: var(--texto); font-size: 12px; margin-bottom: 2px; }
-
 .boveda-error {
-  padding: 9px 11px; border-radius: var(--r-sm);
+  padding: 8px 10px; border-radius: var(--r-sm);
   background: var(--peligro-fondo); border: 1px solid rgba(220, 38, 38, 0.3);
   color: var(--peligro); font-size: 12px; font-weight: 500;
 }
 
-.boveda-acciones { margin-top: 2px; }
+.boveda-acciones { margin-top: 4px; }
 .boveda-btn-submit {
   width: 100%; justify-content: center; height: 38px;
   font-size: 13px; font-weight: 600;
 }
 
-/* Bloque "¿Eres nuevo?" que desaparece para siempre una vez creada la contraseña */
 .inicio-nuevo-box {
   margin-top: 18px;
-  padding-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--borde);
   display: flex;
   align-items: center;
@@ -942,12 +904,12 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   gap: 2px;
 }
 .inicio-nuevo-texto strong {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--texto);
 }
 .inicio-nuevo-texto span {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--texto-med);
 }
 
@@ -957,6 +919,8 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   color: var(--femsa-600);
   background: var(--femsa-tinte);
   font-weight: 600;
+  padding: 6px 10px;
+  font-size: 11.5px;
 }
 .inicio-btn-nuevo:hover {
   background: var(--femsa-600);
@@ -968,19 +932,67 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   padding-top: 12px;
   border-top: 1px solid var(--borde);
   text-align: center;
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
-.inicio-pie {
+.inicio-pie-login {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  justify-content: flex-start;
   font-size: 11px;
   font-family: var(--mono);
-  color: rgba(255, 255, 255, 0.78);
-  padding: 0 4px;
+  color: var(--texto-baj);
+}
+
+/* Columna Derecha: 2/3 de la pantalla (Rojo FEMSA liso y elegante) */
+.inicio-panel-der {
+  flex: 1;
+  background-color: #9B2C39;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.inicio-der-centro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+  animation: aparecer 0.3s ease;
+}
+
+.inicio-femsa-der-svg {
+  width: 280px;
+  max-width: 80%;
+  height: auto;
+  color: #FFFFFF;
+  fill: currentColor;
+  opacity: 0.95;
+}
+
+.inicio-der-lema {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+@media (max-width: 840px) {
+  .pantalla-inicio {
+    flex-direction: column;
+  }
+  .inicio-panel-izq {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--borde);
+  }
+  .inicio-panel-der {
+    display: none;
+  }
 }
 
 @keyframes latido { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
