@@ -1,0 +1,4 @@
+FindingID	ServerID	VulnerabilityTypeID	FunctionalCategory	Severity	FindingStatus	AgeBand	LastSeenBand	DetectionFrequencyBand	ReopenBand	ExploitabilityCategory	MalwareAssociation	ComplianceFlag	PortCategory	ProtocolCategory	EncryptionContext	RemediationCategory	SLAStatus	AssetCriticality	FindingRiskBand
+F-1001	SRV-01	CVE-2024-1	Red	Alta	Abierta	0-30	0-7	Baja	No	Alta	No	Si	Web	TCP	TLS1.2	Parchear	Vencido	Alta	Riesgo-Alto
+F-1002	SRV-02	CVE-2024-2	Endpoint	Critica	En revision	31-90	8-30	Media	Si	Media	Si	Si	SMB	TCP	Ninguno	Aislar	Vencido	Critica	Riesgo-Critico
+F-1003	SRV-03	CVE-2024-3	"Base de datos, produccion"	Media	Resuelta	90+	30+	Alta	No	Baja	No	No	DB	SSL	AES-256	Rotar claves	En plazo	Media	Riesgo-Medio

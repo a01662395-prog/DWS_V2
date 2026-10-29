@@ -3,10 +3,15 @@
  *  CifraControl · Servidor backend en Node.js puro (sin Express, sin Multer)
  * ============================================================================
  *  Dependencias: NINGUNA. Sólo módulos nativos:
- *    http · fs · path · url · crypto
+ *    http · fs · path · url · crypto · child_process
+ *
+ *  PostgreSQL: no se usa ningún cliente npm. La carga de CSV/TSV se delega
+ *  al binario `psql` vía child_process (COPY ... FROM STDIN), con inserts
+ *  por streaming y sin parsear el fichero en JavaScript.
  *
  *  Arranque:  node server.js
  *  Variables: PORT=3000  HOST=127.0.0.1  UPLOADS_DIR=./uploads  SIMULATED_DELAY_MS=900
+ *             PGHOST=postgres  PGPORT=5432  PGUSER  PGPASSWORD  PGDATABASE
  *
  *  ── REST API ──────────────────────────────────────────────────────────────
  *    GET  /api/health                     Estado del servicio
@@ -16,7 +21,7 @@
  *    GET  /api/dashboard/monitoreo        Salud de servicios
  *    GET  /api/dashboard/excepciones      Incidencias por severidad
  *    GET  /api/uploads                    Metadatos de lo recibido (pendiente)
- *    POST /api/upload-excel               Ingesta .xlsx/.xls/.csv → /uploads
+ *    POST /api/upload-excel               .xlsx/.xls → /uploads  ·  .csv (TSV) → PostgreSQL
  *
  *  ── Principio de la ingesta (NO NEGOCIABLE) ────────────────────────────────
  *  Node.js NO abre, parsea, limpia ni procesa los Excel. Sólo es un guardián
@@ -32,6 +37,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
+const { spawn } = require('child_process');
 
 /* ============================================================================
  *  1. CONFIGURACIÓN
@@ -63,6 +69,28 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
 };
+
+/** Conexión a PostgreSQL. `psql` hereda estos valores vía libpq. */
+const PG = {
+  host: process.env.PGHOST || 'postgres',
+  port: process.env.PGPORT || '5432',
+  user: process.env.PGUSER || 'cifracontrol',
+  password: process.env.PGPASSWORD || 'cifracontrol',
+  database: process.env.PGDATABASE || 'cifracontrol',
+};
+
+/** true cuando el esquema se ha podido crear/verificar al arrancar. */
+let dbLista = false;
+
+/** Columnas de `findings`, en el MISMO orden que la cabecera del TSV. */
+const COLUMNAS_FINDINGS = [
+  'finding_id', 'server_id', 'vulnerability_type_id', 'functional_category',
+  'severity', 'finding_status', 'age_band', 'last_seen_band',
+  'detection_frequency_band', 'reopen_band', 'exploitability_category',
+  'malware_association', 'compliance_flag', 'port_category', 'protocol_category',
+  'encryption_context', 'remediation_category', 'sla_status',
+  'asset_criticality', 'finding_risk_band',
+];
 
 /* ============================================================================
  *  2. UTILIDADES
@@ -377,6 +405,174 @@ const etiquetaBytes = (b) => {
 };
 
 /* ============================================================================
+ *  5·b. ACCESO A POSTGRESQL (sin dependencias: binario `psql` + COPY)
+ * ========================================================================== */
+
+/** Banderas comunes de conexión (libpq las toma de aquí, no de variables). */
+const banderasConexion = () => [
+  '-h', PG.host, '-p', String(PG.port), '-U', PG.user, '-d', PG.database, '-X',
+];
+
+/** Normaliza finales de línea a LF y recorta saltos finales (para COPY). */
+function normalizarSaltos(entrada) {
+  const salida = Buffer.allocUnsafe(entrada.length);
+  let j = 0;
+  for (let i = 0; i < entrada.length; i++) {
+    if (entrada[i] === 0x0d) {
+      if (entrada[i + 1] === 0x0a) i++;   // CRLF → LF
+      salida[j++] = 0x0a;
+    } else {
+      salida[j++] = entrada[i];
+    }
+  }
+  let fin = j;
+  while (fin > 0 && salida[fin - 1] === 0x0a) fin--;   // sin líneas vacías al final
+  return salida.subarray(0, fin);
+}
+
+/** Ejecuta un guion por stdin (necesario para `\copy ... FROM STDIN`). */
+function ejecutarPsqlStdin(guion, variables = {}) {
+  return new Promise((resolve, reject) => {
+    const args = banderasConexion().concat(['-v', 'ON_ERROR_STOP=1', '-t', '-A']);
+    for (const [clave, valor] of Object.entries(variables)) args.push('-v', `${clave}=${valor}`);
+    const hijo = spawn('psql', args, { env: { ...process.env, PGPASSWORD: PG.password } });
+    let stdout = '';
+    let stderr = '';
+    hijo.stdout.on('data', (d) => { stdout += d; });
+    hijo.stderr.on('data', (d) => { stderr += d; });
+    hijo.on('error', (err) => reject(new Error(`No se pudo ejecutar psql: ${err.message}`)));
+    hijo.on('close', (code) => resolve({ code, stdout, stderr }));
+    hijo.stdin.on('error', () => {});
+    hijo.stdin.end(guion);
+  });
+}
+
+/** Ejecuta un comando SQL suelto (DDL, SELECT 1...). */
+function ejecutarPsqlComando(sql) {
+  return new Promise((resolve, reject) => {
+    const args = banderasConexion().concat(['-v', 'ON_ERROR_STOP=1', '-t', '-A', '-c', sql]);
+    const hijo = spawn('psql', args, { env: { ...process.env, PGPASSWORD: PG.password } });
+    let stdout = '';
+    let stderr = '';
+    hijo.stdout.on('data', (d) => { stdout += d; });
+    hijo.stderr.on('data', (d) => { stderr += d; });
+    hijo.on('error', (err) => reject(new Error(`No se pudo ejecutar psql: ${err.message}`)));
+    hijo.on('close', (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+/** Comprueba la conexión y deja el resultado en `dbLista`. */
+async function pingDb() {
+  try {
+    const r = await ejecutarPsqlComando('SELECT 1;');
+    dbLista = r.code === 0;
+  } catch {
+    dbLista = false;
+  }
+  return dbLista;
+}
+
+/** Esquema idempotente: se ejecuta en cada arranque. */
+const ESQUEMA_SQL = `
+CREATE TABLE IF NOT EXISTS ingestas (
+  id          uuid PRIMARY KEY,
+  archivo     text        NOT NULL,
+  bytes       bigint      NOT NULL,
+  filas       integer     NOT NULL DEFAULT 0,
+  recibido_en timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS findings (
+  _ingest_id               uuid        NOT NULL,
+  _source_file             text        NOT NULL,
+  _ingested_at             timestamptz NOT NULL DEFAULT now(),
+  finding_id               text,
+  server_id                text,
+  vulnerability_type_id    text,
+  functional_category      text,
+  severity                 text,
+  finding_status           text,
+  age_band                 text,
+  last_seen_band           text,
+  detection_frequency_band text,
+  reopen_band              text,
+  exploitability_category  text,
+  malware_association      text,
+  compliance_flag          text,
+  port_category            text,
+  protocol_category        text,
+  encryption_context       text,
+  remediation_category     text,
+  sla_status               text,
+  asset_criticality        text,
+  finding_risk_band        text
+);
+
+CREATE INDEX IF NOT EXISTS findings_finding_id_idx ON findings (finding_id);
+CREATE INDEX IF NOT EXISTS findings_server_id_idx  ON findings (server_id);
+`;
+
+async function ensureSchema() {
+  try {
+    const r = await ejecutarPsqlComando(ESQUEMA_SQL);
+    dbLista = r.code === 0;
+    if (dbLista) {
+      console.log(`[db] Esquema verificado en ${PG.host}:${PG.port}/${PG.database}`);
+    } else {
+      console.warn('[db] No se pudo preparar el esquema:', r.stderr.trim().split('\n')[0]);
+    }
+  } catch (err) {
+    dbLista = false;
+    console.warn('[db] PostgreSQL no disponible:', err.message);
+  }
+  return dbLista;
+}
+
+/**
+ * Carga un TSV en `findings` (append) dentro de UNA transacción:
+ *   1. Tabla temporal con los mismos tipos que `findings`.
+ *   2. `\copy` vuelca el fichero tal cual (psql parsea el TSV, no Node).
+ *   3. Se insertan filas + metadatos y se registra la ingesta en `ingestas`.
+ * Devuelve el número de filas cargadas.
+ */
+async function cargarTsvEnPostgres(datos, archivo, id) {
+  const cols = COLUMNAS_FINDINGS.join(', ');
+  // Staging explícito: sólo las 20 columnas del TSV, todas text y nullable.
+  const definicionStg = COLUMNAS_FINDINGS.map((c) => `${c} text`).join(', ');
+
+  const preludio =
+    '\\set ON_ERROR_STOP on\n' +
+    'BEGIN;\n' +
+    `CREATE TEMP TABLE _stg (${definicionStg}) ON COMMIT DROP;\n` +
+    `\\copy _stg (${cols}) FROM STDIN WITH (FORMAT csv, HEADER true, DELIMITER E'\\t')\n`;
+
+  const epilogo =
+    '\n\\.\n' +
+    `INSERT INTO findings (_ingest_id, _source_file, ${cols})\n` +
+    `  SELECT :'id', :'archivo', ${cols} FROM _stg;\n` +
+    'INSERT INTO ingestas (id, archivo, bytes, filas)\n' +
+    "  VALUES (:'id', :'archivo', CAST(:'bytes' AS bigint), (SELECT count(*) FROM _stg));\n" +
+    'SELECT count(*) AS filas FROM _stg \\gset\n' +
+    'COMMIT;\n' +
+    '\\echo __FILAS__:filas\n';
+
+  const guion = Buffer.concat([
+    Buffer.from(preludio, 'utf8'),
+    normalizarSaltos(datos),
+    Buffer.from(epilogo, 'utf8'),
+  ]);
+
+  const { code, stdout, stderr } = await ejecutarPsqlStdin(guion, {
+    id, archivo, bytes: String(datos.length),
+  });
+  if (code !== 0) throw new Error(stderr.trim() || `psql terminó con código ${code}`);
+
+  dbLista = true;
+  const coincidencia = /__FILAS__(\d+)/.exec(stdout);
+  return coincidencia ? Number(coincidencia[1]) : 0;
+}
+
+/* ============================================================================
  *  6. PARSER MULTIPART NATIVO (sustituye a Multer, sin dependencias)
  * ========================================================================== */
 
@@ -513,16 +709,45 @@ async function apiUploadExcel(req, res) {
     return enviarError(res, 500, 'STORAGE_ERROR', 'No se pudo guardar el archivo en el almacén de recepción.');
   }
 
-  console.log(`[uploads] Recibido ${nombreDisco} (${etiquetaBytes(archivo.datos.length)}) → pending_processing`);
-
-  // Respuesta: metadatos + estado. El frontend muestra la confirmación.
-  enviarJSON(res, 201, {
+  const base = {
     id,
     archivo: nombreLimpio,
     bytes: archivo.datos.length,
     bytesLegibles: etiquetaBytes(archivo.datos.length),
     contentType: mimeDe(ext),
     recibidoEn: isoAhora(),
+  };
+
+  /* --- CSV (TSV) → carga directa en PostgreSQL --------------------------- */
+  if (ext === '.csv') {
+    if (!dbLista) {
+      return enviarError(res, 503, 'DB_UNAVAILABLE',
+        'PostgreSQL no está disponible: el archivo quedó almacenado pero no se cargó.',
+        { ...base, status: 'pending_processing' });
+    }
+    try {
+      const filas = await cargarTsvEnPostgres(archivo.datos, nombreLimpio, id);
+      console.log(`[ingesta] ${nombreLimpio}: ${filas} filas → findings (id ${id})`);
+      return enviarJSON(res, 201, {
+        ...base,
+        status: 'loaded',
+        tabla: 'findings',
+        filasCargadas: filas,
+        mensaje: 'Archivo cargado en PostgreSQL (append sobre la tabla findings).',
+      });
+    } catch (err) {
+      dbLista = await pingDb();
+      console.error('[ingesta] Error de carga:', err.message);
+      return enviarError(res, 500, 'DB_LOAD_ERROR',
+        'El archivo quedó almacenado, pero falló la carga en la base de datos.',
+        { ...base, status: 'pending_processing', detalle: err.message });
+    }
+  }
+
+  /* --- XLSX / XLS → sólo almacenados (sin parser) ------------------------ */
+  console.log(`[uploads] Recibido ${nombreDisco} (${etiquetaBytes(archivo.datos.length)}) → pending_processing`);
+  enviarJSON(res, 201, {
+    ...base,
     status: 'pending_processing',
     mensaje: 'Archivo almacenado. Queda en cola para el worker de procesamiento.',
   });
@@ -586,7 +811,8 @@ function retardo(query, factor = 1) {
  *  8. ENDPOINTS DEL DASHBOARD
  * ========================================================================== */
 
-function apiHealth(res) {
+async function apiHealth(res) {
+  const disponible = await pingDb();
   enviarJSON(res, 200, {
     status: 'ok',
     servicio: 'cifracontrol-core',
@@ -595,6 +821,7 @@ function apiHealth(res) {
     node: process.version,
     timestamp: isoAhora(),
     almacenamiento: { dir: path.relative(ROOT, UPLOADS_DIR) || '.', pendientes: listarUploads().length },
+    baseDatos: { disponible, host: PG.host, puerto: PG.port, database: PG.database },
   });
 }
 
@@ -719,7 +946,7 @@ function apiListarUploads(res) {
     filas,
     pendientes: filas.length,
     estado: 'pending_processing',
-    nota: 'Node.js no procesa los archivos: sólo los almacena y los deja en cola.',
+    nota: 'Los .csv (TSV) se cargan en PostgreSQL (tabla findings); .xlsx/.xls quedan en cola.',
   });
 }
 
@@ -792,6 +1019,7 @@ const server = http.createServer((req, res) => {
 });
 
 asegurarUploads();
+ensureSchema();
 
 server.listen(PORT, HOST, () => {
   console.log('');
@@ -802,6 +1030,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  → Salud:   http://${HOST}:${PORT}/api/health`);
   console.log(`  → Ingesta: POST http://${HOST}:${PORT}/api/upload-excel  (campo "file")`);
   console.log(`  → Retardo simulado: ${DELAY_MS}ms  ·  almacén: ${UPLOADS_DIR}`);
+  console.log(`  → PostgreSQL: ${PG.host}:${PG.port}/${PG.database}  (usuario ${PG.user})`);
   console.log('');
 });
 

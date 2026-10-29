@@ -1,5 +1,8 @@
 FROM node:24-alpine
 
+# Cliente de PostgreSQL nativo: el backend carga los TSV con `psql` (COPY ... FROM STDIN).
+RUN apk add --no-cache postgresql-client
+
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0 \
@@ -8,7 +11,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-COPY --chown=node:node server.js index.html app.js estilos.css ./
+COPY --chown=node:node server.js index.html app.js db.js pipeline.js manifest.json estilos.css ./
 
 RUN mkdir -p /app/uploads && chown node:node /app/uploads
 

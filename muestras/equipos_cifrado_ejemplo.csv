@@ -1,0 +1,5 @@
+EquipoID,Sistema Operativo,Versión SO,Estado TPM,Encryption Readiness,Estado de Cifrado,Tecnología de Cifrado State,Estado de Cumplimiento,Fuente de Datos,En MDM,En AD,En macOS,UsuarioID,País,Región,Categoría de Equipo,Clase de Equipo,Perfil de Privilegio,Antigüedad Meses,Banda Antigüedad,Estado de Cuenta,Mes Último Logon,Banda Recencia,Estado Hardware,Tipo de Red
+EQ-1001,Windows,10.0.22631,Ready,Ready,Encrypted,BitLocker,Compliant,Intune,Sí,Sí,No,USR-01,México,LATAM,Laptop,Corporativo,Estándar,14,13-24 meses,Activa,2025-10,0-30 días,Óptimo,WiFi
+EQ-1002,Windows,10.0.19045,Ready,Ready,Not encrypted,None,Compliant,AD,No,Sí,No,No asignado,España,EMEA,Desktop,Corporativo,Admin,30,25-36 meses,Activa,2025-09,31-60 días,Óptimo,Ethernet
+EQ-1003,macOS,26.1,N/A,Ready,Encrypted,FileVault,Compliant,JAMF,Sí,No,Sí,USR-02,México,No disponible,Laptop,Corporativo,Estándar,6,0-12 meses,Activa,2025-11,0-30 días,Óptimo,WiFi
+EQ-1004,Windows,10.0.22631,Ready,Ready,Encrypted,BitLocker,Compliant,Intune,Sí,Sí,No,USR-03,Colombia,LATAM,Laptop,Corporativo,Estándar,10,0-12 meses,Activa,2025-11,0-30 días,Óptimo,WiFi

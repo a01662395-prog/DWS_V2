@@ -3,19 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CifraControl · Cifrado e inventario</title>
-<meta name="description" content="Panel de control de cifrado, inventario tecnológico, monitoreo y excepciones.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='19' font-size='19'>🔐</text></svg>">
+<title>FEMSA · CifraControl Security &amp; Inventory</title>
+<meta name="description" content="Plataforma corporativa FEMSA de control de cifrado, inventario tecnológico, monitoreo y limpieza de datos.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239B2C39'/><text x='16' y='22' font-family='sans-serif' font-weight='800' font-size='18' fill='%23ffffff' text-anchor='middle'>F</text></svg>">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
 
 <!-- ==========================================================================
-     BIBLIOTECA DE ICONOS
+     BIBLIOTECA DE ICONOS Y LOGOTIPO CORPORATIVO FEMSA
      Sprite SVG en línea: cero peticiones de red y color heredable (currentColor).
-     Uso: <svg class="ico"><use href="#i-candado"></use></svg>
      ========================================================================== -->
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="logo-femsa" viewBox="0 0 1593 367">
+    <path fill="currentColor" fill-rule="evenodd" d="m1549.6 318c14.1 30.5 43.1 28.3 43.1 28.3v9.8h-136.8c-41 0-46.3-33.7-46.3-33.7 0 0-50.7-109-71.2-107.9-20.5 1.1-32.3 31.6-32.3 31.6h-8.6c0 0 80.8-238.5 92.7-238.5 9.7 0 145.4 279.9 159.4 310.4zm-366.4-260.3c-14 0-29-3.2-29 21.8 0 47.9 139 50.1 139 159 0 91.5-73.3 126.3-131.5 126.3-58.2 0-104.5-40.3-104.5-40.3v-94.7c0 0 45.2 69.7 91.6 69.7 14 0 34.4-2.2 34.4-27.2 0-48-135.7-65.4-135.7-152.5 0-91.5 71.1-119.8 129.3-119.8 58.2 0 100.2 31.6 100.2 31.6v87.1c0 0-47.4-61-93.8-61zm-405.1-13.1c22.8 47.5 44.1 114.4 79.7 114.4 29.1 0 52.8-148.1 52.8-148.1h117.5v307.1c0 26.1 30.1 32.7 30.1 32.7h-154.1v-217.8c0 0-89.4 234.1-98 234.1-8.6 0-130.4-234.1-130.4-234.1v188.4c0 17.4 26.9 30.5 26.9 30.5h-69v-308.2c0-20.7-33.4-34.9-33.4-34.9h119.7c0 0 39.8-2.2 58.2 35.9zm-325.5 290.8c0 0 93.8 8.7 139-57.7l-18.3 74.1h-243.5v-308.2c0-20.7-33.5-34.9-33.5-34.9h277l18.3 74.1c-45.2-66.5-139-57.8-139-57.8v143.8h76.5c23.7 0 36.7-40.3 36.7-40.3 0 0 24.7 114.4 23.7 113.3-19.4-36-78.7-54.5-78.7-54.5h-58.2zm-157.3-252.7c-45.3-66.4-139-57.7-139-57.7v143.8h76.5c23.7 0 36.6-40.3 36.6-40.3 0 0 24.8 114.3 23.7 113.2-19.4-35.9-78.6-54.4-78.6-54.4h-58.2v128.5c0 25.1 32.3 35.9 32.3 35.9h-155.2v-308.2c0-20.7-33.4-34.8-33.4-34.8h277z"/>
+  </symbol>
+  <symbol id="i-descargar" viewBox="0 0 24 24"><path d="M12 4v12m-5-5l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="i-basura" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14"/></symbol>
   <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
   <symbol id="i-candado" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
   <symbol id="i-resumen" viewBox="0 0 24 24"><path d="M4 19V5m0 14h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/></symbol>
@@ -57,10 +62,15 @@
   <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
 
     <div class="sidebar__marca">
-      <span class="marca__logo"><svg class="ico"><use href="#i-candado"></use></svg></span>
+      <span class="marca__femsa" title="FEMSA">
+        <svg class="marca__femsa-svg" viewBox="0 0 1593 367" role="img" aria-label="FEMSA">
+          <use href="#logo-femsa"></use>
+        </svg>
+      </span>
+      <span class="marca__separador" aria-hidden="true"></span>
       <span class="marca__texto">
         <strong>CifraControl</strong>
-        <small>Panel de cifrado</small>
+        <small>SEC · INVENTORY</small>
       </span>
     </div>
 
@@ -142,7 +152,7 @@
           <svg class="ico ico--oscuro"><use href="#i-luna"></use></svg>
         </button>
 
-        <span class="avatar" title="Sesión local (sin login)">CC</span>
+        <span class="avatar" title="FEMSA · Sesión Local">FEMSA</span>
       </div>
     </header>
 
@@ -180,11 +190,9 @@
           <div class="modulo" data-modulo="serie">
             <article class="tarjeta">
               <header class="tarjeta__cab">
-                <div><h2>Volumen cifrado por día</h2><p>GB protegidos frente al objetivo diario</p></div>
-                <div class="segmentos" role="group" aria-label="Rango de fechas">
-                  <button class="segmento" data-rango="7">7 d</button>
-                  <button class="segmento is-activo" data-rango="30">30 d</button>
-                  <button class="segmento" data-rango="90">90 d</button>
+                <div><h2>Gráfica de verificación de carga</h2><p>Registros almacenados en la Base de Datos tras el pipeline de Python</p></div>
+                <div class="segmentos" role="group" aria-label="Agrupación">
+                  <button class="segmento is-activo" data-rango="30">BD Local</button>
                 </div>
               </header>
               <div class="tarjeta__cuerpo">
@@ -205,7 +213,7 @@
 
           <div class="modulo" data-modulo="algoritmos">
             <article class="tarjeta">
-              <header class="tarjeta__cab"><div><h2>Reparto por algoritmo</h2><p>Qué cifra cada activo del parque</p></div></header>
+              <header class="tarjeta__cab"><div><h2>Distribución de datos limpios</h2><p>Desglose por estado o categoría detectada en el archivo</p></div></header>
               <div class="tarjeta__cuerpo">
                 <div class="skel-esq" data-skel>
                   <div class="skel skel--donut"></div>
@@ -379,33 +387,34 @@
                 <div data-datos="carga">
                   <!-- Zona de arrastrar y soltar -->
                   <form id="formCarga" class="drop" novalidate>
-                    <input type="file" id="inputExcel" class="sr" accept=".xlsx,.xls,.csv" hidden>
+                    <input type="file" id="inputExcel" class="sr" accept=".xlsx,.xls,.csv,.tsv" hidden>
                     <div class="drop__zona" id="zonaSoltar" tabindex="0" role="button"
                          aria-label="Arrastra aquí tu archivo o pulsa para seleccionarlo">
                       <span class="drop__icono"><svg class="ico ico--grande"><use href="#i-nube"></use></svg></span>
-                      <p class="drop__titulo">Arrastra tu archivo Excel aquí</p>
+                      <p class="drop__titulo">Arrastra tu archivo Excel o CSV aquí</p>
                       <p class="drop__ayuda">o <button type="button" class="enlace" id="btnBuscarArchivo">búscalo en tu equipo</button></p>
-                      <p class="drop__nota">Formatos admitidos: <code>.xlsx</code> <code>.xls</code> <code>.csv</code> · máximo 25 MB</p>
+                      <p class="drop__nota">Pasa por el <strong>Pipeline de Python (Partes A y B)</strong> y se guarda en tu Base de Datos Local · <code>.xlsx</code> <code>.xls</code> <code>.csv</code> <code>.tsv</code></p>
                     </div>
 
-                    <!-- Barra de progreso real (XHR) -->
+                    <!-- Barra de progreso real -->
                     <div class="progreso" id="progreso" hidden>
                       <div class="progreso__cab">
                         <span class="progreso__nombre" id="progresoNombre"></span>
                         <span class="progreso__pct" id="progresoPct">0 %</span>
                       </div>
                       <div class="progreso__riel"><div class="progreso__barra" id="progresoBarra"></div></div>
-                      <p class="progreso__estado" id="progresoEstado">Preparando el envío…</p>
+                      <p class="progreso__estado" id="progresoEstado">Preparando el pipeline…</p>
                     </div>
                   </form>
 
-                  <!-- Confirmación devuelta por el servidor -->
+                  <!-- Confirmación devuelta por el pipeline -->
                   <div class="confirm" id="confirmacion" hidden>
                     <span class="confirm__icono"><svg class="ico"><use href="#i-check"></use></svg></span>
                     <div class="confirm__cuerpo">
                       <strong id="confirmNombre"></strong>
                       <p id="confirmDetalle"></p>
-                      <code class="pastilla-codigo" id="confirmEstado">status: pending_processing</code>
+                      <code class="pastilla-codigo" id="confirmEstado">status: procesado</code>
+                      <ul id="confirmAvisos" style="margin:8px 0 0 18px;font-size:.82rem;color:var(--texto-baj)" hidden></ul>
                     </div>
                   </div>
                 </div>
@@ -416,8 +425,11 @@
           <div class="modulo" data-modulo="cola">
             <article class="tarjeta">
               <header class="tarjeta__cab">
-                <div><h2>Cola del worker</h2><p>Archivos almacenados a la espera de proceso</p></div>
-                <button class="btn" id="btnRefrescarCola"><svg class="ico"><use href="#i-refrescar"></use></svg></button>
+                <div><h2>Verificación de Base de Datos</h2><p>Conteo de registros cargados y gráfica en vivo</p></div>
+                <div style="display:flex;gap:8px">
+                  <button class="btn" id="btnVaciarBD" title="Vaciar base de datos local"><svg class="ico"><use href="#i-basura"></use></svg>Vaciar BD</button>
+                  <button class="btn" id="btnRefrescarCola" aria-label="Actualizar verificación"><svg class="ico"><use href="#i-refrescar"></use></svg></button>
+                </div>
               </header>
               <div class="tarjeta__cuerpo">
                 <div class="skel-esq" data-skel>
@@ -425,9 +437,9 @@
                 </div>
                 <div class="fallo" data-fallo hidden>
                   <svg class="ico ico--grande"><use href="#i-wifi-off"></use></svg>
-                  <h3>No se pudo leer la cola</h3>
+                  <h3>No se pudo leer la base de datos</h3>
                   <p data-fallo-msg></p>
-                  <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar conexión</button>
+                  <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar</button>
                 </div>
                 <div data-datos="cola"></div>
               </div>
@@ -442,7 +454,7 @@
       <section class="vista" data-vista="ajustes" hidden>
         <div class="rejilla-2">
           <article class="tarjeta">
-            <header class="tarjeta__cab"><div><h2>Comportamiento de la interfaz</h2><p>Preferencias locales del panel</p></div></header>
+            <header class="tarjeta__cab"><div><h2>Comportamiento y Base de Datos Portable</h2><p>Tus datos viven en tu equipo y puedes exportarlos o importarlos</p></div></header>
             <div class="tarjeta__cuerpo lista-set">
               <label class="fila-set">
                 <span><strong>Tema oscuro</strong><small>Conmuta la paleta del panel</small></span>
@@ -457,19 +469,26 @@
                 <input type="checkbox" id="setSidebar" class="interruptor">
               </label>
               <div class="fila-set">
-                <span><strong>Retardo de la API</strong><small>Latencia simulada del servidor</small></span>
+                <span><strong>Retardo simulado</strong><small>Latencia para visualizar los Skeleton Loaders</small></span>
                 <select id="setRetardo" class="campo">
-                  <option value="0">Sin retardo</option>
+                  <option value="0" selected>Sin retardo (instantáneo)</option>
                   <option value="300">300 ms</option>
-                  <option value="900" selected>900 ms</option>
-                  <option value="1800">1800 ms</option>
+                  <option value="900">900 ms</option>
                 </select>
+              </div>
+              <div class="fila-set" style="flex-wrap:wrap;gap:10px">
+                <span><strong>Compartir / Respaldar Base de Datos</strong><small>Pasa tus datos limpios a un compañero o carga los suyos</small></span>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="btn btn--primario" id="btnExportarBD"><svg class="ico"><use href="#i-descargar"></use></svg>Exportar BD (.json)</button>
+                  <button type="button" class="btn" id="btnImportarBD"><svg class="ico"><use href="#i-subir"></use></svg>Importar BD</button>
+                  <input type="file" id="inputImportarBD" accept=".json" hidden>
+                </div>
               </div>
             </div>
           </article>
 
           <article class="tarjeta">
-            <header class="tarjeta__cab"><div><h2>Estado del servicio</h2><p>Respuesta de /api/health</p></div></header>
+            <header class="tarjeta__cab"><div><h2>Estado del Motor Local y Pipeline</h2><p>Base de Datos IndexedDB + Python Pyodide Wasm</p></div></header>
             <div class="tarjeta__cuerpo">
               <pre class="codigo" id="saludJson">consultando…</pre>
               <button class="btn" id="btnComprobarSalud"><svg class="ico"><use href="#i-refrescar"></use></svg>Comprobar ahora</button>
@@ -485,6 +504,8 @@
 <!-- Avisos flotantes -->
 <div class="avisos" id="avisos" aria-live="polite" aria-atomic="false"></div>
 
+<script src="db.js"></script>
+<script src="pipeline.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
