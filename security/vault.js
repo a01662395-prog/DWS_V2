@@ -14,15 +14,25 @@ const Vault = (() => {
   const TESTIGO_CANARY = 'FEMSA_ZERO_KNOWLEDGE_CANARY_V1';
   const STORE_META = '__vault_meta__';
   const TIEMPO_INACTIVIDAD_MS = 15 * 60 * 1000; // 15 minutos
+  const CLAVE_LICENCIA_ADMIN = 'FEMSA-ADMIN-2026';
 
-  /** Clave maestra activa: sólo vive en esta clausura privada en memoria RAM. */
+  /** Clave maestra y rol activos: sólo viven en esta clausura privada en memoria RAM. */
   let claveActivaRAM = null;
+  let rolActivoRAM = null; // 'admin' | 'operador'
   let timerInactividad = null;
   let intentosFallidos = 0;
   const suscriptores = new Set();
 
   function estaDesbloqueada() {
     return claveActivaRAM !== null;
+  }
+
+  function obtenerRol() {
+    return rolActivoRAM || 'operador';
+  }
+
+  function esAdmin() {
+    return rolActivoRAM === 'admin';
   }
 
   /** Devuelve la CryptoKey en RAM o lanza error si la bóveda está bloqueada. */
@@ -97,7 +107,7 @@ const Vault = (() => {
    * Si ya existe una bóveda configurada en IndexedDB, rechaza el registro para impedir
    * que alguien sobrescriba o vuelva a usar el flujo de "usuario nuevo".
    */
-  async function inicializarBoveda(db, password) {
+  async function inicializarBoveda(db, password, opciones = {}) {
     const yaExiste = await existeBoveda(db);
     if (yaExiste) {
       throw new Error('Ya existe una contraseña maestra configurada en este equipo. No es posible registrar un nuevo usuario sobre una bóveda activa.');
@@ -107,11 +117,21 @@ const Vault = (() => {
       throw new Error('La contraseña maestra debe tener al menos 6 caracteres.');
     }
 
+    const rolSolicitado = opciones.rol === 'admin' ? 'admin' : 'operador';
+    if (rolSolicitado === 'admin') {
+      const pinIngresado = String(opciones.claveAdmin || '').trim().toUpperCase();
+      if (pinIngresado !== CLAVE_LICENCIA_ADMIN) {
+        throw new Error('Clave de licencia de Administrador inválida. Introduce la clave corporativa (FEMSA-ADMIN-2026) o regístrate con rol Operador.');
+      }
+    }
+
     const salt = CryptoEngine.generarBytesAleatorios(CryptoEngine.SALT_BYTES);
     const key = await CryptoEngine.derivarClaveMaestra(password, salt);
 
+    // El rol queda sellado criptográficamente dentro del payload autenticado AES-GCM-256
     const testigoPayload = {
       canary: TESTIGO_CANARY,
+      rol: rolSolicitado,
       createdAt: new Date().toISOString(),
     };
     const { iv: authIv, ciphertext: authTag } = await CryptoEngine.cifrarPayload(key, testigoPayload);
@@ -133,8 +153,9 @@ const Vault = (() => {
 
     intentosFallidos = 0;
     claveActivaRAM = key;
+    rolActivoRAM = rolSolicitado;
     reiniciarTimerInactividad();
-    notificar('UNLOCKED', { recienCreada: true });
+    notificar('UNLOCKED', { recienCreada: true, rol: rolActivoRAM });
     return true;
   }
 
@@ -158,6 +179,7 @@ const Vault = (() => {
     }
 
     const candidateKey = await CryptoEngine.derivarClaveMaestra(password, config.salt);
+    let rolDescifrado = 'operador';
 
     try {
       const testigoDescifrado = await CryptoEngine.descifrarPayload(
@@ -169,6 +191,7 @@ const Vault = (() => {
       if (!testigoDescifrado || testigoDescifrado.canary !== TESTIGO_CANARY) {
         throw new Error('CANARY_MISMATCH');
       }
+      rolDescifrado = testigoDescifrado.rol === 'admin' ? 'admin' : 'operador';
     } catch {
       intentosFallidos++;
       const err = new Error('Contraseña maestra incorrecta. No se pudo descifrar la bóveda.');
@@ -179,8 +202,9 @@ const Vault = (() => {
 
     intentosFallidos = 0;
     claveActivaRAM = candidateKey;
+    rolActivoRAM = rolDescifrado;
     reiniciarTimerInactividad();
-    notificar('UNLOCKED', { recienCreada: false });
+    notificar('UNLOCKED', { recienCreada: false, rol: rolActivoRAM });
     return true;
   }
 
@@ -190,6 +214,7 @@ const Vault = (() => {
    */
   function bloquear(razon = 'MANUAL') {
     claveActivaRAM = null;
+    rolActivoRAM = null;
     if (timerInactividad) {
       clearTimeout(timerInactividad);
       timerInactividad = null;
@@ -213,6 +238,8 @@ const Vault = (() => {
   return {
     STORE_META,
     estaDesbloqueada,
+    obtenerRol,
+    esAdmin,
     obtenerClaveActiva,
     existeBoveda,
     obtenerMetaBoveda,

@@ -116,6 +116,65 @@ const CryptoEngine = (() => {
     return JSON.parse(jsonStr);
   }
 
+  /**
+   * Calcula el hash SHA-256 en hexadecimal de una cadena (para validar tokens/PINs sin exponerlos).
+   */
+  async function hashSHA256Hex(texto) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(String(texto).trim().toUpperCase());
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Cifra un paquete de exportación (.json) completo con una contraseña de transporte
+   * usando PBKDF2 (250,000 iteraciones) + AES-GCM-256 + Salt de 16B + IV de 12B.
+   * El archivo resultante es 100% opaco e ilegible fuera del dashboard.
+   */
+  async function cifrarPaqueteTransporte(objetoPlano, passwordTransporte) {
+    if (!passwordTransporte || String(passwordTransporte).length < 6) {
+      throw new Error('La contraseña de cifrado del archivo debe tener al menos 6 caracteres.');
+    }
+    const salt = generarBytesAleatorios(SALT_BYTES);
+    const claveTransporte = await derivarClaveMaestra(passwordTransporte, salt);
+    const { iv, ciphertext } = await cifrarPayload(claveTransporte, objetoPlano);
+
+    return {
+      formato: 'FEMSA_CIFRACONTROL_ENCRYPTED_PACKAGE_V1',
+      algoritmo: 'AES-GCM-256',
+      kdf: 'PBKDF2-HMAC-SHA256',
+      iteraciones: PBKDF2_ITERATIONS,
+      exportadoEn: new Date().toISOString(),
+      salt: aBase64(salt),
+      iv: aBase64(iv),
+      ciphertext: aBase64(ciphertext),
+    };
+  }
+
+  /**
+   * Descifra y verifica la autenticidad (MAC Tag GCM) de un paquete .json cifrado.
+   */
+  async function descifrarPaqueteTransporte(paquete, passwordTransporte) {
+    if (!paquete || paquete.formato !== 'FEMSA_CIFRACONTROL_ENCRYPTED_PACKAGE_V1' || !paquete.salt || !paquete.iv || !paquete.ciphertext) {
+      throw new Error('El archivo no es un paquete cifrado válido de FEMSA CifraControl (.enc.json).');
+    }
+    if (!passwordTransporte) {
+      throw new Error('Debes introducir la contraseña de desencriptación del archivo.');
+    }
+
+    const saltBytes = deBase64(paquete.salt);
+    const ivBytes = deBase64(paquete.iv);
+    const cipherBytes = deBase64(paquete.ciphertext);
+
+    const claveTransporte = await derivarClaveMaestra(passwordTransporte, saltBytes);
+    try {
+      return await descifrarPayload(claveTransporte, ivBytes, cipherBytes.buffer);
+    } catch {
+      throw new Error('Contraseña de archivo incorrecta o el paquete cifrado fue alterado.');
+    }
+  }
+
   return {
     PBKDF2_ITERATIONS,
     SALT_BYTES,
@@ -126,5 +185,8 @@ const CryptoEngine = (() => {
     derivarClaveMaestra,
     cifrarPayload,
     descifrarPayload,
+    hashSHA256Hex,
+    cifrarPaqueteTransporte,
+    descifrarPaqueteTransporte,
   };
 })();

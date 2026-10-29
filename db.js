@@ -50,16 +50,29 @@ const DB = (() => {
     });
   }
 
+  /** Verifica si la bóveda está actualmente bloqueada (sin clave en RAM). */
+  function estaBloqueada() {
+    return !Vault.estaDesbloqueada();
+  }
+
+  function obtenerRol() {
+    return Vault.obtenerRol();
+  }
+
+  function esAdmin() {
+    return Vault.esAdmin();
+  }
+
   /** Verifica si ya existe una contraseña maestra configurada en esta máquina. */
   async function tieneBovedaConfigurada() {
     const db = await abrir();
     return Vault.existeBoveda(db);
   }
 
-  /** Crea la bóveda con la contraseña maestra elegida por el usuario. */
-  async function crearBoveda(password) {
+  /** Crea la bóveda con la contraseña maestra y el rol elegidos por el usuario. */
+  async function crearBoveda(password, opciones = {}) {
     const db = await abrir();
-    return Vault.inicializarBoveda(db, password);
+    return Vault.inicializarBoveda(db, password, opciones);
   }
 
   /** Desbloquea la bóveda validando la contraseña maestra contra el testigo cifrado. */
@@ -75,6 +88,7 @@ const DB = (() => {
     return {
       bovedaConfigurada: Boolean(meta),
       desbloqueadaEnRAM: Vault.estaDesbloqueada(),
+      rolActivo: Vault.obtenerRol(),
       algoritmo: meta?.algoritmo || 'AES-GCM-256 / PBKDF2-HMAC-SHA256',
       iteracionesPBKDF2: meta?.iterations || 250000,
       longitudIV: '12 bytes (96 bits)',
@@ -85,8 +99,12 @@ const DB = (() => {
 
   /**
    * Guarda el resultado limpio del pipeline de Python CIFRADO con AES-GCM-256 en IndexedDB.
+   * Restringido exclusivamente al rol 'admin'.
    */
   async function guardarCarga({ filas, meta, registroCola }) {
+    if (!Vault.esAdmin()) {
+      throw new Error('Acceso denegado: sólo el rol Administrador puede procesar e ingestar archivos Excel/CSV originales.');
+    }
     const db = await abrir();
 
     await SecureDB.setEncrypted(db, STORE_DATOS, 'vigente', {
@@ -159,27 +177,30 @@ const DB = (() => {
   }
 
   /**
-   * Exporta el respaldo descifrado (requiere que la bóveda esté desbloqueada)
-   * para poder compartirlo con un compañero que tiene su propia contraseña.
+   * Exporta el respaldo 100% CIFRADO con AES-GCM-256 usando una contraseña de transporte.
+   * El archivo .enc.json resultante no contiene ni un solo dato en texto plano.
    */
-  async function exportarBackup() {
+  async function exportarBackup(passwordTransporte) {
     const actual = await obtenerActual();
     const historial = await listarHistorial();
-    return {
-      version: 1,
+    const objetoPlano = {
+      version: 2,
       exportadoEn: new Date().toISOString(),
-      app: 'FEMSA CifraControl',
+      app: 'FEMSA CifraControl Zero-Knowledge',
       datos: actual,
       historial,
     };
+    return CryptoEngine.cifrarPaqueteTransporte(objetoPlano, passwordTransporte);
   }
 
   /**
-   * Importa un backup JSON y lo cifra inmediatamente con la CryptoKey activa del usuario actual.
+   * Descifra en memoria RAM un paquete .enc.json usando la contraseña de transporte
+   * e inmediatamente lo vuelve a cifrar con la CryptoKey local del usuario en IndexedDB.
    */
-  async function importarBackup(contenido) {
+  async function importarBackup(paqueteCifrado, passwordTransporte) {
+    const contenido = await CryptoEngine.descifrarPaqueteTransporte(paqueteCifrado, passwordTransporte);
     if (!contenido || !contenido.datos) {
-      throw new Error('El archivo de respaldo no tiene un formato válido de CifraControl.');
+      throw new Error('El paquete descifrado no contiene una estructura válida de CifraControl.');
     }
     await vaciar();
     const db = await abrir();
@@ -200,11 +221,14 @@ const DB = (() => {
       }
     }
 
-    return true;
+    return contenido.datos.filas?.length || 0;
   }
 
   return {
     abrir,
+    estaBloqueada,
+    obtenerRol,
+    esAdmin,
     tieneBovedaConfigurada,
     crearBoveda,
     desbloquearBoveda,

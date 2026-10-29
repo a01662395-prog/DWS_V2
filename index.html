@@ -157,7 +157,7 @@
           <svg class="ico" style="width:14px;height:14px"><use href="#i-candado"></use></svg>Bloquear
         </button>
 
-        <span class="avatar" title="FEMSA · Bóveda Zero-Knowledge">FEMSA</span>
+        <span class="avatar" id="badgeRolUsuario" title="FEMSA · Rol activo en memoria RAM">FEMSA</span>
       </div>
     </header>
 
@@ -374,9 +374,14 @@
         <div class="rejilla-2 rejilla-2--carga">
 
           <div class="modulo" data-modulo="carga">
-            <article class="tarjeta">
+            <!-- Panel exclusivo para Administrador: Ingesta de Excel / CSV con Pipeline Python -->
+            <article class="tarjeta" id="panelCargaAdmin">
               <header class="tarjeta__cab">
-                <div><h2>Ingesta de hojas de cálculo</h2><p>Envío directo al almacén de recepción</p></div>
+                <div>
+                  <h2>Ingesta de hojas de cálculo (Exclusivo Admin)</h2>
+                  <p>Procesamiento con Pipeline de Python (Pyodide) y cifrado directo en IndexedDB</p>
+                </div>
+                <span class="pastilla pastilla--protegido">ROL: ADMIN</span>
               </header>
               <div class="tarjeta__cuerpo">
                 <div class="skel-esq" data-skel>
@@ -398,7 +403,7 @@
                       <span class="drop__icono"><svg class="ico ico--grande"><use href="#i-nube"></use></svg></span>
                       <p class="drop__titulo">Arrastra tu archivo Excel o CSV aquí</p>
                       <p class="drop__ayuda">o <button type="button" class="enlace" id="btnBuscarArchivo">búscalo en tu equipo</button></p>
-                      <p class="drop__nota">Pasa por el <strong>Pipeline de Python (Partes A y B)</strong> y se guarda en tu Base de Datos Local · <code>.xlsx</code> <code>.xls</code> <code>.csv</code> <code>.tsv</code></p>
+                      <p class="drop__nota">Pasa por el <strong>Pipeline de Python (Partes A y B)</strong> y se cifra con <strong>AES-GCM-256</strong> en tu Base de Datos Local · <code>.xlsx</code> <code>.xls</code> <code>.csv</code> <code>.tsv</code></p>
                     </div>
 
                     <!-- Barra de progreso real -->
@@ -422,6 +427,40 @@
                       <ul id="confirmAvisos" style="margin:8px 0 0 18px;font-size:.82rem;color:var(--texto-baj)" hidden></ul>
                     </div>
                   </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Panel de Transferencia Cifrada (.enc.json): Visible para Operador y Administrador -->
+            <article class="tarjeta" id="panelCargaPaqueteCifrado" style="margin-top:14px">
+              <header class="tarjeta__cab">
+                <div>
+                  <h2>Paquetes de Datos Cifrados (<code>.enc.json</code>)</h2>
+                  <p id="subtituloPaqueteCifrado">Importa o exporta la base de datos cifrada de extremo a extremo con AES-GCM-256</p>
+                </div>
+                <span class="pastilla pastilla--info">AES-GCM-256</span>
+              </header>
+              <div class="tarjeta__cuerpo" style="display:grid;gap:12px">
+                <div class="boveda-aviso-zk" id="avisoSoloOperador" hidden>
+                  <svg class="ico"><use href="#i-escudo"></use></svg>
+                  <div>
+                    <strong>Modo Operador / Lector Activo</strong>
+                    <p>Tu cuenta tiene privilegios de consulta. La carga de hojas Excel/CSV originales está reservada al Administrador. Para actualizar tu dashboard, importa un paquete cifrado <code>.enc.json</code> o expórtalo con contraseña.</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="boveda-label" for="inputPassTransporteCarga">Contraseña de cifrado / desencriptación del archivo <code>.json</code></label>
+                  <input type="password" id="inputPassTransporteCarga" class="campo boveda-input" placeholder="Mínimo 6 caracteres para cifrar o abrir el paquete .json…">
+                </div>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="btn btn--primario" id="btnImportarPaqueteCarga">
+                    <svg class="ico"><use href="#i-subir"></use></svg>Cargar paquete cifrado (.json)
+                  </button>
+                  <button type="button" class="btn" id="btnExportarPaqueteCarga">
+                    <svg class="ico"><use href="#i-descargar"></use></svg>Descargar paquete cifrado (.json)
+                  </button>
                 </div>
               </div>
             </article>
@@ -481,11 +520,15 @@
                   <option value="900">900 ms</option>
                 </select>
               </div>
-              <div class="fila-set" style="flex-wrap:wrap;gap:10px">
-                <span><strong>Compartir / Respaldar Base de Datos</strong><small>Pasa tus datos limpios a un compañero o carga los suyos</small></span>
+              <div class="fila-set" style="flex-direction:column;align-items:stretch;gap:10px">
+                <div>
+                  <strong>Compartir / Respaldar Base de Datos Cifrada (<code>.enc.json</code>)</strong>
+                  <small style="display:block">El archivo exportado viaja 100% encriptado con AES-GCM-256. Al importarlo se desencripta en RAM y se vuelve a cifrar en tu IndexedDB local.</small>
+                </div>
+                <input type="password" id="inputPassTransporteAjustes" class="campo boveda-input" placeholder="Contraseña de cifrado del archivo .json (mín. 6 caracteres)…">
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button type="button" class="btn btn--primario" id="btnExportarBD"><svg class="ico"><use href="#i-descargar"></use></svg>Exportar BD (.json)</button>
-                  <button type="button" class="btn" id="btnImportarBD"><svg class="ico"><use href="#i-subir"></use></svg>Importar BD</button>
+                  <button type="button" class="btn btn--primario" id="btnExportarBD"><svg class="ico"><use href="#i-descargar"></use></svg>Exportar BD Cifrada (.json)</button>
+                  <button type="button" class="btn" id="btnImportarBD"><svg class="ico"><use href="#i-subir"></use></svg>Importar BD Cifrada (.json)</button>
                   <input type="file" id="inputImportarBD" accept=".json" hidden>
                 </div>
               </div>
@@ -551,8 +594,24 @@
         </div>
 
         <div id="bloqueConfirmarPass" hidden>
-          <label class="boveda-label" for="inputPassConfirm">Confirmar nueva contraseña</label>
-          <input type="password" id="inputPassConfirm" class="campo boveda-input" placeholder="Repite tu contraseña…" autocomplete="new-password">
+          <div style="margin-bottom:12px">
+            <label class="boveda-label" for="inputPassConfirm">Confirmar nueva contraseña</label>
+            <input type="password" id="inputPassConfirm" class="campo boveda-input" placeholder="Repite tu contraseña…" autocomplete="new-password">
+          </div>
+
+          <div style="margin-bottom:12px">
+            <label class="boveda-label" for="selectRolRegistro">Nivel de privilegios en este equipo</label>
+            <select id="selectRolRegistro" class="campo boveda-input" style="width:100%">
+              <option value="operador" selected>Operador / Lector (Solo importar y exportar .json cifrado)</option>
+              <option value="admin">Administrador (Subir Excel/CSV + Pipeline Python + .json cifrado)</option>
+            </select>
+          </div>
+
+          <div id="bloqueClaveAdmin" hidden>
+            <label class="boveda-label" for="inputClaveAdmin">Clave de licencia de Administrador</label>
+            <input type="password" id="inputClaveAdmin" class="campo boveda-input" placeholder="Introduce la clave maestra de Admin…" autocomplete="off">
+            <small style="display:block;margin-top:4px;font-size:11px;color:var(--texto-baj)">Requerida para habilitar la ingesta de archivos Excel/CSV originales.</small>
+          </div>
         </div>
 
         <div class="boveda-aviso-zk" id="avisoZeroKnowledge" hidden>

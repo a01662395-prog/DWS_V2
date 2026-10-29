@@ -1387,6 +1387,15 @@ function pintarProgreso(porcentaje, texto, error = false) {
 }
 
 async function enviarArchivo(archivo) {
+  if (!DB.esAdmin()) {
+    avisar(
+      'Privilegios insuficientes',
+      'Tu cuenta tiene rol Operador/Lector. Sólo un Administrador puede subir archivos Excel o CSV originales. Usa la importación de paquetes cifrados (.json).',
+      'error'
+    );
+    return;
+  }
+
   const problema = validarArchivo(archivo);
   zonaSoltar.classList.toggle('is-error', !!problema);
   if (problema) {
@@ -1596,6 +1605,97 @@ function conectarFiltros() {
   });
 }
 
+function aplicarPermisosRol() {
+  const esAdmin = DB.esAdmin();
+  const rol = DB.obtenerRol();
+
+  const badgeRol = document.getElementById('badgeRolUsuario');
+  if (badgeRol) {
+    badgeRol.textContent = esAdmin ? 'FEMSA · ADMIN' : 'FEMSA · LECTOR';
+    badgeRol.title = esAdmin
+      ? 'Rol Administrador: Carga de Excel/CSV + Exportación/Importación .json cifrado'
+      : 'Rol Operador/Lector: Consulta y carga exclusiva de paquetes .json cifrados';
+  }
+
+  const panelCargaAdmin = document.getElementById('panelCargaAdmin');
+  if (panelCargaAdmin) {
+    panelCargaAdmin.hidden = !esAdmin;
+  }
+
+  const avisoSoloOperador = document.getElementById('avisoSoloOperador');
+  if (avisoSoloOperador) {
+    avisoSoloOperador.hidden = esAdmin;
+  }
+
+  const panelCargaPaquete = document.getElementById('panelCargaPaqueteCifrado');
+  if (panelCargaPaquete) {
+    panelCargaPaquete.style.marginTop = esAdmin ? '14px' : '0px';
+  }
+
+  const navCargaTxt = document.querySelector('[data-ir="carga"] .nav__txt');
+  if (navCargaTxt) {
+    navCargaTxt.textContent = esAdmin ? 'Cargar datos' : 'Paquetes cifrados';
+  }
+}
+
+async function ejecutarExportacionCifrada(inputPassEl) {
+  const passTransporte = (inputPassEl?.value || '').trim();
+  if (passTransporte.length < 6) {
+    avisar(
+      'Contraseña requerida',
+      'Escribe una contraseña de al menos 6 caracteres en el campo para cifrar el archivo .json antes de descargarlo.',
+      'alerta'
+    );
+    inputPassEl?.focus();
+    return;
+  }
+
+  try {
+    const paqueteCifrado = await DB.exportarBackup(passTransporte);
+    const blob = new Blob([JSON.stringify(paqueteCifrado, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cifracontrol_bd_cifrada_${new Date().toISOString().slice(0, 10)}.enc.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    avisar(
+      'Paquete .json Cifrado Exportado',
+      'El archivo fue encriptado con AES-GCM-256 (PBKDF2 250k it.). Compártelo junto con su contraseña de transporte.',
+      'exito'
+    );
+  } catch (err) {
+    avisar('Error al cifrar paquete', err.message, 'error');
+  }
+}
+
+async function ejecutarImportacionCifrada(file, inputPassEl) {
+  if (!file) return;
+  let passTransporte = (inputPassEl?.value || '').trim();
+  if (!passTransporte) {
+    passTransporte = (window.prompt('Introduce la contraseña de desencriptación del paquete .json cifrado:') || '').trim();
+  }
+  if (!passTransporte) {
+    avisar('Importación cancelada', 'Se requiere la contraseña del paquete para desencriptarlo en memoria RAM.', 'alerta');
+    return;
+  }
+
+  try {
+    const texto = await file.text();
+    const json = JSON.parse(texto);
+    const total = await DB.importarBackup(json, passTransporte);
+    if (inputPassEl) inputPassEl.value = '';
+    avisar(
+      'Paquete Desencriptado e Importado',
+      `Se verificó la firma AES-GCM-256 y se recifraron ${num(total)} registros en tu IndexedDB local.`,
+      'exito'
+    );
+    refrescarTodo();
+  } catch (err) {
+    avisar('No se pudo abrir el paquete cifrado', err.message, 'error');
+  }
+}
+
 function conectarAjustes() {
   document.getElementById('setTema').addEventListener('change', (e) => aplicarTema(e.target.checked));
 
@@ -1634,44 +1734,43 @@ function conectarAjustes() {
     });
   }
 
-  // Exportar e Importar Base de Datos para compartir con compañeros
+  // Exportar e Importar Base de Datos Cifrada (.enc.json) desde Ajustes y desde Vista de Carga
   const btnExportar = document.getElementById('btnExportarBD');
   const btnImportar = document.getElementById('btnImportarBD');
   const inputImportar = document.getElementById('inputImportarBD');
+  const inputPassAjustes = document.getElementById('inputPassTransporteAjustes');
+
+  const btnExportarCarga = document.getElementById('btnExportarPaqueteCarga');
+  const btnImportarCarga = document.getElementById('btnImportarPaqueteCarga');
+  const inputPassCarga = document.getElementById('inputPassTransporteCarga');
+
+  let inputPassActivoParaImportar = inputPassAjustes;
 
   if (btnExportar) {
-    btnExportar.addEventListener('click', async () => {
-      try {
-        const backup = await DB.exportarBackup();
-        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `cifracontrol_bd_${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        avisar('Base de Datos exportada', 'Puedes enviar este archivo .json a cualquier compañero.', 'exito');
-      } catch (err) {
-        avisar('Error al exportar', err.message, 'error');
-      }
-    });
+    btnExportar.addEventListener('click', () => ejecutarExportacionCifrada(inputPassAjustes));
+  }
+  if (btnExportarCarga) {
+    btnExportarCarga.addEventListener('click', () => ejecutarExportacionCifrada(inputPassCarga));
   }
 
   if (btnImportar && inputImportar) {
-    btnImportar.addEventListener('click', () => inputImportar.click());
+    btnImportar.addEventListener('click', () => {
+      inputPassActivoParaImportar = inputPassAjustes;
+      inputImportar.click();
+    });
+  }
+  if (btnImportarCarga && inputImportar) {
+    btnImportarCarga.addEventListener('click', () => {
+      inputPassActivoParaImportar = inputPassCarga;
+      inputImportar.click();
+    });
+  }
+
+  if (inputImportar) {
     inputImportar.addEventListener('change', async () => {
       const file = inputImportar.files[0];
       if (!file) return;
-      try {
-        const texto = await file.text();
-        const json = JSON.parse(texto);
-        await DB.importarBackup(json);
-        const total = json.datos?.filas?.length || 0;
-        avisar('Base de Datos importada', `Se cargaron y cifraron ${num(total)} registros con AES-GCM-256.`, 'exito');
-        refrescarTodo();
-      } catch (err) {
-        avisar('Archivo no válido', err.message, 'error');
-      }
+      await ejecutarImportacionCifrada(file, inputPassActivoParaImportar);
       inputImportar.value = '';
     });
   }
@@ -1754,12 +1853,24 @@ function conectarBoveda() {
   const btnBloquear = document.getElementById('btnBloquearBoveda');
   const btnIrARegistro = document.getElementById('btnIrARegistro');
   const btnVolverALogin = document.getElementById('btnVolverALogin');
+  const selectRolRegistro = document.getElementById('selectRolRegistro');
+  const bloqueClaveAdmin = document.getElementById('bloqueClaveAdmin');
+  const inputClaveAdmin = document.getElementById('inputClaveAdmin');
 
   const mostrarError = (msg) => {
     if (!errBox) return;
     errBox.textContent = msg;
     errBox.hidden = false;
   };
+
+  if (selectRolRegistro && bloqueClaveAdmin) {
+    selectRolRegistro.addEventListener('change', () => {
+      bloqueClaveAdmin.hidden = selectRolRegistro.value !== 'admin';
+      if (selectRolRegistro.value === 'admin') {
+        setTimeout(() => inputClaveAdmin?.focus(), 40);
+      }
+    });
+  }
 
   if (btnBloquear) {
     btnBloquear.addEventListener('click', () => {
@@ -1821,20 +1932,33 @@ function conectarBoveda() {
         return;
       }
 
+      const rolElegido = selectRolRegistro ? selectRolRegistro.value : 'operador';
+      const claveAdmin = inputClaveAdmin ? inputClaveAdmin.value : '';
+
       const textoOriginal = txtBtn.textContent;
       btnSubmit.disabled = true;
       txtBtn.textContent = 'Derivando clave PBKDF2 (250k it.)…';
 
       try {
         if (modo === 'crear') {
-          await DB.crearBoveda(pass);
-          avisar('Contraseña creada con éxito', 'Bóveda AES-GCM-256 inicializada. Bienvenido al dashboard.', 'exito');
+          await DB.crearBoveda(pass, { rol: rolElegido, claveAdmin });
+          avisar(
+            `Cuenta creada (${rolElegido === 'admin' ? 'Administrador' : 'Operador'})`,
+            'Bóveda AES-GCM-256 inicializada en memoria RAM.',
+            'exito'
+          );
         } else {
           await DB.desbloquearBoveda(pass);
-          avisar('Sesión iniciada', 'Base de datos descifrada en memoria RAM.', 'exito');
+          avisar(
+            `Sesión iniciada (${DB.esAdmin() ? 'Administrador' : 'Operador'})`,
+            'Base de datos descifrada en memoria RAM.',
+            'exito'
+          );
         }
         inputPass.value = '';
         inputConfirm.value = '';
+        if (inputClaveAdmin) inputClaveAdmin.value = '';
+        aplicarPermisosRol();
         if (pantallaInicio) pantallaInicio.hidden = true;
         app.hidden = false;
         irA((location.hash || '#/resumen').slice(2), { empujar: false });
