@@ -8,6 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239B2C39'/><text x='16' y='22' font-family='sans-serif' font-weight='800' font-size='18' fill='%23ffffff' text-anchor='middle'>F</text></svg>">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="estilos.css">
+<link rel="stylesheet" href="dashboard-global.css">
 </head>
 <body>
 
@@ -76,6 +77,12 @@
     </div>
 
     <nav class="nav">
+      <a class="nav__link" data-ir="dashboard" href="#/dashboard">
+        <svg class="ico">
+          <use href="#i-resumen"></use>
+        </svg>
+        <span class="nav__txt">Dashboard global</span>
+      </a>
       <p class="nav__titulo">Navegación</p>
       <a class="nav__link is-activo" data-ir="resumen" href="#/resumen">
         <svg class="ico"><use href="#i-resumen"></use></svg><span class="nav__txt">Resumen de cifrado</span>
@@ -96,6 +103,12 @@
         <svg class="ico"><use href="#i-alerta"></use></svg><span class="nav__txt">Excepciones</span>
         <b class="nav__badge nav__badge--peligro" data-badge="excepciones" hidden>0</b>
       </a>
+      <a class="nav__link" data-ir="reportes" href="#/reportes">
+  <svg class="ico" aria-hidden="true">
+    <use href="#i-descargar"></use>
+  </svg>
+  <span class="nav__txt">Reportes</span>
+</a>
 
       <p class="nav__titulo">Herramientas y datos</p>
       <a class="nav__link" data-ir="carga" href="#/carga">
@@ -336,6 +349,126 @@
       <!-- ================================================================
            VISTA 5 · EXCEPCIONES
            ================================================================ -->
+
+<!-- DASHBOARD GLOBAL -->
+<section class="vista" data-vista="dashboard" hidden>
+
+  <div class="dashboard-global-cab">
+    <div>
+      <h2>Explorador mundial</h2>
+      <p>Analiza los registros de cifrado por país y región.</p>
+    </div>
+
+    <button class="btn" id="globalLimpiar">
+      Limpiar filtros
+    </button>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="global-filtros">
+    <label>
+      Región
+      <select class="campo" id="globalRegion">
+        <option value="">Todas las regiones</option>
+      </select>
+    </label>
+
+    <label>
+      País
+      <select class="campo" id="globalPais">
+        <option value="">Todos los países</option>
+      </select>
+    </label>
+
+    <label>
+      Estado de cifrado
+      <select class="campo" id="globalEstado">
+        <option value="">Todos los estados</option>
+        <option value="protegido">Protegido</option>
+        <option value="parcial">Parcial</option>
+        <option value="sin_cifrar">Sin cifrar</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- INDICADORES -->
+  <div class="global-kpis">
+    <article class="global-kpi">
+      <span>Total de registros</span>
+      <strong id="globalTotal">0</strong>
+    </article>
+
+    <article class="global-kpi">
+      <span>Registros protegidos</span>
+      <strong id="globalProtegidos">0</strong>
+    </article>
+
+    <article class="global-kpi">
+      <span>Cobertura de cifrado</span>
+      <strong id="globalCobertura">0 %</strong>
+    </article>
+
+    <article class="global-kpi">
+      <span>Registros sin cifrar</span>
+      <strong id="globalSinCifrar">0</strong>
+    </article>
+  </div>
+
+  <!-- MAPA -->
+  <article class="tarjeta global-mapa-tarjeta">
+    <header class="tarjeta__cab">
+      <div>
+        <h2>Mapa mundial de cifrado</h2>
+        <p id="globalSeleccion">
+          Vista global · Todos los países
+        </p>
+      </div>
+    </header>
+
+    <div class="tarjeta__cuerpo">
+      <div id="mapaMundial"></div>
+      <p class="global-nota">
+        Selecciona un país para actualizar las métricas.
+        Los países sin registros aparecerán sin datos.
+      </p>
+    </div>
+  </article>
+
+  <!-- ACCESOS AL DETALLE -->
+  <div class="global-detalles">
+    <article class="tarjeta">
+      <div class="tarjeta__cuerpo">
+        <h3>Resumen de cifrado</h3>
+        <p>Consulta la distribución y cobertura de cifrado.</p>
+        <button class="btn" id="globalVerResumen">
+          Ver resumen
+        </button>
+      </div>
+    </article>
+
+    <article class="tarjeta">
+      <div class="tarjeta__cuerpo">
+        <h3>Inventario</h3>
+        <p>Explora los registros de los equipos.</p>
+        <button class="btn" id="globalVerInventario">
+          Ver inventario
+        </button>
+      </div>
+    </article>
+
+    <article class="tarjeta">
+      <div class="tarjeta__cuerpo">
+        <h3>Excepciones</h3>
+        <p>Revisa alertas y registros que requieren atención.</p>
+        <button class="btn" id="globalVerExcepciones">
+          Ver excepciones
+        </button>
+      </div>
+    </article>
+  </div>
+
+</section>
+
       <section class="vista" data-vista="excepciones" hidden>
         <div class="modulo" data-modulo="excepciones">
           <article class="tarjeta">
@@ -548,6 +681,59 @@
         </div>
       </section>
 
+<section class="vista" data-vista="reportes" hidden>
+  <article class="tarjeta">
+    <header class="tarjeta__cab">
+      <div>
+        <h2>Generador de reportes</h2>
+        <p>Filtra tus datos y genera un reporte en PDF.</p>
+      </div>
+    </header>
+
+    <div class="tarjeta__cuerpo">
+      <div class="reporte-filtros">
+        <label>Columna para filtrar
+          <select class="campo" id="reporteCampo">
+            <option value="">Todas las columnas</option>
+          </select>
+        </label>
+
+        <label>Valor
+          <select class="campo" id="reporteValor">
+            <option value="">Todos los valores</option>
+          </select>
+        </label>
+
+        <label>Buscar texto
+          <input class="campo" id="reporteBuscar"
+                 type="search" placeholder="Buscar registros">
+        </label>
+
+        <label>Estado de cifrado
+          <select class="campo" id="reporteEstado">
+            <option value="">Todos</option>
+            <option value="protegido">Protegido</option>
+            <option value="parcial">Parcial</option>
+            <option value="sin_cifrar">Sin cifrar</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="reporte-acciones">
+        <button class="btn" id="reporteLimpiar">
+          Limpiar filtros
+        </button>
+        <button class="btn btn--primario" id="reporteDescargar">
+          Descargar PDF
+        </button>
+      </div>
+
+      <p class="reporte-contador" id="reporteContador"></p>
+      <div id="reporteVistaPrevia"></div>
+    </div>
+  </article>
+</section>
+
     </main>
   </div>
 </div>
@@ -655,6 +841,15 @@
 <script src="security/secure-db.js"></script>
 <script src="db.js"></script>
 <script src="pipeline.js"></script>
+<script src="https://unpkg.com/globe.gl"></script>
+<script src="dashboard-global.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
+
+<a class="nav__link" data-ir="reportes" href="#/reportes">
+  <svg class="ico">
+    <use href="#i-descargar"></use>
+  </svg>
+  <span class="nav__txt">Reportes</span>
+</a>

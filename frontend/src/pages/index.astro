@@ -1,0 +1,439 @@
+
+---
+const titulo = "CifraControl | Dashboard";
+---
+
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{titulo}</title>
+  </head>
+
+  <body>
+    <div class="dashboard">
+      <aside class="sidebar">
+        <h2><span>✦</span> CifraControl</h2>
+        <p class="menu-label">MENÚ PRINCIPAL</p>
+
+        <nav>
+          <a href="/" class="active">◈ Dashboard</a>
+          <a href="#mapa-seccion">◎ Mapa mundial</a>
+          <a href="#estadisticas">▥ Estadísticas</a>
+          <a href="#reportes">▤ Reportes</a>
+        </nav>
+      </aside>
+
+      <main>
+        <header>
+          <div>
+            <p class="subtitle">Panel de análisis</p>
+            <h1>Dashboard Global</h1>
+          </div>
+          <span class="status">● Vista de demostración</span>
+        </header>
+
+        <section class="stats" id="estadisticas">
+          <article class="stat-card">
+            <div class="stat-icon purple">🌎</div>
+            <p>Países disponibles</p>
+            <h2 id="total-paises">—</h2>
+          </article>
+
+          <article class="stat-card">
+            <div class="stat-icon blue">📍</div>
+            <p>Región seleccionada</p>
+            <h2 id="region-actual">Todas</h2>
+          </article>
+
+          <article class="stat-card">
+            <div class="stat-icon coral">📊</div>
+            <p>Registros cargados</p>
+            <h2>—</h2>
+          </article>
+
+          <article class="stat-card">
+            <div class="stat-icon cyan">📈</div>
+            <p>Indicadores</p>
+            <h2>Pendientes</h2>
+          </article>
+        </section>
+
+        <section class="content">
+          <article class="map-card" id="mapa-seccion">
+            <div class="card-header">
+              <div>
+                <h2>Explorador mundial</h2>
+                <p>Selecciona un país para explorar sus datos</p>
+              </div>
+
+              <select id="filtro-region">
+                <option value="Todos">Todas las regiones</option>
+                <option value="Americas">América</option>
+                <option value="Europe">Europa</option>
+                <option value="Asia">Asia</option>
+                <option value="Africa">África</option>
+                <option value="Oceania">Oceanía</option>
+              </select>
+            </div>
+
+            <div id="mapa"></div>
+          </article>
+
+          <aside class="details-card">
+            <h2>Información geográfica</h2>
+            <p class="muted">País seleccionado</p>
+            <h3 id="pais-seleccionado">Ninguno</h3>
+
+            <div class="detail">
+              <span>Región</span>
+              <strong id="detalle-region">—</strong>
+            </div>
+
+            <div class="detail">
+              <span>Estado</span>
+              <strong>Mapa activo</strong>
+            </div>
+
+            <div class="info">
+              Los datos estadísticos aparecerán cuando
+              conectemos la base de datos.
+            </div>
+          </aside>
+        </section>
+
+        <section class="reports" id="reportes">
+          <h2>Reportes y visualizaciones</h2>
+          <p>
+            Próximamente conectaremos las gráficas
+            con los datos reales de CifraControl.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      import * as echarts from "echarts";
+
+      const contenedormapa = document.getElementById("mapa")!;
+      const mapa = echarts.init(contenedormapa);
+
+      const filtro = document.getElementById(
+        "filtro-region"
+      ) as HTMLSelectElement;
+
+      const regiones: Record<string, string> = {
+        Americas: "América",
+        Europe: "Europa",
+        Asia: "Asia",
+        Africa: "África",
+        Oceania: "Oceanía",
+      };
+
+      let paises: any[] = [];
+      let seleccionados = new Set<string>();
+
+      async function iniciarMapa() {
+        const respuesta = await fetch(
+          "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"
+        );
+
+        if (!respuesta.ok) {
+          throw new Error("No se pudo cargar el mapa");
+        }
+
+        const geojson = await respuesta.json();
+
+        echarts.registerMap("mundo", geojson);
+
+        paises = geojson.features.map((feature: any) => ({
+          name: feature.properties.name,
+          region: feature.properties.continent || null,
+        }));
+
+        document.getElementById("total-paises")!.textContent =
+          String(paises.length);
+
+        actualizarMapa("Todos");
+      }
+
+      function actualizarMapa(region: string) {
+        // El mapa se mantiene completo mientras
+        // preparamos la clasificación de regiones.
+        mapa.setOption({
+          tooltip: { trigger: "item" },
+          geo: {
+            map: "mundo",
+            roam: true,
+            selectedMode: "single",
+            itemStyle: {
+              areaColor: "#E7E9F5",
+              borderColor: "#FFFFFF",
+              borderWidth: 0.7,
+            },
+            emphasis: {
+              itemStyle: { areaColor: "#B48CF5" },
+            },
+            select: {
+              itemStyle: { areaColor: "#7562F5" },
+            },
+          },
+        });
+
+        document.getElementById("region-actual")!.textContent =
+          region === "Todos" ? "Todas" : regiones[region];
+      }
+
+      mapa.on("click", (evento) => {
+        if (!evento.name) return;
+
+        document.getElementById("pais-seleccionado")!
+          .textContent = evento.name;
+
+        document.getElementById("detalle-region")!
+          .textContent = "Por clasificar";
+      });
+
+      filtro.addEventListener("change", () => {
+        actualizarMapa(filtro.value);
+      });
+
+      iniciarMapa().catch(console.error);
+
+      window.addEventListener("resize", () => mapa.resize());
+    </script>
+  </body>
+</html>
+
+<style>
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f0f1fa;
+    color: #26354c;
+  }
+
+  .dashboard {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    width: 235px;
+    flex-shrink: 0;
+    background: white;
+    padding: 28px 18px;
+    border-right: 1px solid #e7e9f5;
+  }
+
+  .sidebar h2 {
+    font-size: 21px;
+    margin-bottom: 55px;
+  }
+
+  .sidebar h2 span {
+    color: #7562f5;
+  }
+
+  .menu-label {
+    color: #9ca3af;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  nav a {
+    text-decoration: none;
+    color: #64748b;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  nav a.active,
+  nav a:hover {
+    background: #efedff;
+    color: #7562f5;
+  }
+
+  main {
+    flex: 1;
+    min-width: 0;
+    padding: 30px;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+  }
+
+  h1 {
+    margin: 5px 0;
+    font-size: 30px;
+  }
+
+  .subtitle,
+  .muted {
+    color: #94a3b8;
+    font-size: 13px;
+  }
+
+  .status {
+    color: #7562f5;
+    background: white;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+
+  .stat-card,
+  .map-card,
+  .details-card,
+  .reports {
+    background: white;
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: 0 4px 20px #26354c08;
+  }
+
+  .stat-card p {
+    color: #94a3b8;
+    font-size: 13px;
+  }
+
+  .stat-card h2 {
+    font-size: 23px;
+    margin-bottom: 0;
+  }
+
+  .stat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+  }
+
+  .purple { background: #efedff; }
+  .blue { background: #e3f2ff; }
+  .coral { background: #fff0ec; }
+  .cyan { background: #e4f9ff; }
+
+  .content {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(240px, 1fr);
+    gap: 20px;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .card-header h2,
+  .details-card h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .card-header p {
+    color: #94a3b8;
+    font-size: 13px;
+  }
+
+  select {
+    border: 1px solid #e7e9f5;
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+    color: #26354c;
+  }
+
+  #mapa {
+    width: 100%;
+    height: 480px;
+  }
+
+  .details-card h3 {
+    font-size: 25px;
+    color: #7562f5;
+  }
+
+  .detail {
+    display: flex;
+    justify-content: space-between;
+    padding: 17px 0;
+    border-bottom: 1px solid #edf0f5;
+    font-size: 13px;
+  }
+
+  .info {
+    margin-top: 30px;
+    background: #f0f1fa;
+    padding: 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .reports {
+    margin-top: 22px;
+  }
+
+  .reports p {
+    color: #94a3b8;
+  }
+
+  @media (max-width: 1000px) {
+    .stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .content {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 650px) {
+    .dashboard {
+      flex-direction: column;
+    }
+
+    .sidebar {
+      width: 100%;
+    }
+
+    main {
+      padding: 15px;
+    }
+
+    .stats {
+      grid-template-columns: 1fr;
+    }
+
+    header,
+    .card-header {
+      flex-wrap: wrap;
+    }
+  }
+</style>

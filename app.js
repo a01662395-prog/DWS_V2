@@ -24,7 +24,7 @@ const config = {
 };
 
 const estado = {
-  vista: 'resumen',
+  vista: 'dashboard',
   cache: {},
   vuelo: {},
   sparks: [],
@@ -636,6 +636,7 @@ function actualizarBadgesDesdeMetricas(d) {
 /** Refresca absolutamente todos los módulos tras cargar o vaciar la base de datos. */
 function refrescarTodo() {
   estado.cache = {};
+  if (estado.vista === 'dashboard') window.CifraGlobo?.cargar();
   (MODULOS_POR_VISTA[estado.vista] || []).forEach((m) => cargarModulo(m, { forzar: true }));
   comprobarSalud();
 }
@@ -652,6 +653,8 @@ const VISTAS = {
   excepciones: { titulo: 'Excepciones y Flags',   sub: 'Incoherencias y alertas detectadas por el pipeline de Python' },
   carga:       { titulo: 'Cargar Excel / CSV',    sub: 'Sube tu archivo → Limpieza en Python → Base de Datos Local' },
   ajustes:     { titulo: 'Ajustes y Respaldo',    sub: 'Preferencias y exportación/importación de tu Base de Datos' },
+  reportes:    { titulo: 'Reportes',              sub: 'Genera reportes personalizados a partir de datos reales'},
+  dashboard:   { titulo: 'Dashboard global',      sub: 'Explorador mundial de cifrado y seguridad'}
 };
 
 const MODULOS_POR_VISTA = {
@@ -662,10 +665,12 @@ const MODULOS_POR_VISTA = {
   excepciones: ['excepciones'],
   carga: ['carga', 'cola'],
   ajustes: [],
+  reportes: [],
+  dashboard: [],
 };
 
 function irA(vista, { empujar = true } = {}) {
-  if (!VISTAS[vista]) vista = 'resumen';
+  if (!VISTAS[vista]) vista = 'dashboard';
 
   estado.vista = vista;
   const meta = VISTAS[vista];
@@ -688,7 +693,15 @@ function irA(vista, { empujar = true } = {}) {
   }
 
   cerrarMenuMovil();
-  (MODULOS_POR_VISTA[vista] || []).forEach((m) => cargarModulo(m));
+  if (vista === 'dashboard') {
+  requestAnimationFrame(() => {
+    window.CifraGlobo?.cargar();
+  });
+}
+
+(MODULOS_POR_VISTA[vista] || []).forEach((m) => cargarModulo(m));
+
+if (vista === 'reportes') cargarReportes();
 }
 
 /* ==========================================================================
@@ -1540,7 +1553,7 @@ function conectarNavegacion() {
   document.getElementById('btnMenu').addEventListener('click', alternarMenu);
   document.getElementById('capa').addEventListener('click', cerrarMenuMovil);
 
-  window.addEventListener('popstate', () => irA((location.hash || '#/resumen').slice(2), { empujar: false }));
+  window.addEventListener('popstate', () => irA((location.hash || '#/dashboard').slice(2), { empujar: false }));
 
   document.addEventListener('keydown', (e) => {
     if (e.key === '/' && !/input|select|textarea/i.test(document.activeElement.tagName)) {
@@ -1959,7 +1972,7 @@ function conectarBoveda() {
         aplicarPermisosRol();
         if (pantallaInicio) pantallaInicio.hidden = true;
         app.hidden = false;
-        irA((location.hash || '#/resumen').slice(2), { empujar: false });
+        irA((location.hash || '#/dashboard').slice(2), { empujar: false });
         refrescarTodo();
         comprobarSalud();
       } catch (err) {
@@ -2006,6 +2019,7 @@ async function iniciar() {
   conectarCarga();
   conectarAjustes();
   conectarBoveda();
+  conectarReportes();
 
   if (DB.estaBloqueada()) {
     await mostrarModalBoveda('desbloquear');
@@ -2013,9 +2027,198 @@ async function iniciar() {
     const pantallaInicio = document.getElementById('pantallaInicio');
     if (pantallaInicio) pantallaInicio.hidden = true;
     app.hidden = false;
-    irA((location.hash || '#/resumen').slice(2), { empujar: false });
+    irA((location.hash || '#/dashboard').slice(2), { empujar: false });
     comprobarSalud();
   }
+}
+
+let reporteFilas = [];
+let reporteFiltradas = [];
+
+const reporteEl = id => document.getElementById(id);
+const reporteTexto = v => String(v ?? '');
+
+function conectarReportes() {
+  ['reporteCampo', 'reporteValor', 'reporteBuscar', 'reporteEstado']
+    .forEach(id => {
+      reporteEl(id)?.addEventListener('input', () => {
+        if (id === 'reporteCampo') actualizarValoresReporte();
+        pintarReporte();
+      });
+    });
+
+  reporteEl('reporteLimpiar')?.addEventListener('click', () => {
+    ['reporteCampo', 'reporteValor', 'reporteBuscar', 'reporteEstado']
+      .forEach(id => reporteEl(id).value = '');
+    actualizarValoresReporte();
+    pintarReporte();
+  });
+
+  reporteEl('reporteDescargar')
+    ?.addEventListener('click', descargarReportePDF);
+}
+
+async function cargarReportes() {
+  const actual = await DB.obtenerActual();
+  reporteFilas = actual.filas || [];
+
+  const campo = reporteEl('reporteCampo');
+  const columnas = [...new Set(
+    reporteFilas.flatMap(f => Object.keys(f))
+  )].sort();
+
+  campo.replaceChildren(new Option('Todas las columnas', ''));
+
+  columnas.forEach(c => {
+    campo.add(new Option(c.replaceAll('_', ' '), c));
+  });
+
+  actualizarValoresReporte();
+  pintarReporte();
+}
+
+function actualizarValoresReporte() {
+  const campo = reporteEl('reporteCampo').value;
+  const select = reporteEl('reporteValor');
+
+  select.replaceChildren(new Option('Todos los valores', ''));
+
+  if (campo) {
+    const valores = [...new Set(
+      reporteFilas.map(f => reporteTexto(f[campo]))
+    )].sort();
+
+    valores.forEach(v => select.add(new Option(v || '(Vacío)', v)));
+  }
+
+  select.disabled = !campo;
+}
+
+function pintarReporte() {
+  const campo = reporteEl('reporteCampo').value;
+  const valor = reporteEl('reporteValor').value;
+  const buscar = reporteEl('reporteBuscar').value.toLowerCase().trim();
+  const estado = reporteEl('reporteEstado').value;
+
+  reporteFiltradas = reporteFilas.filter(f => {
+    if (campo && valor && reporteTexto(f[campo]) !== valor) return false;
+    if (estado && clasificarEstadoFila(f) !== estado) return false;
+    if (buscar && !Object.values(f).some(v =>
+      reporteTexto(v).toLowerCase().includes(buscar)
+    )) return false;
+    return true;
+  });
+
+  reporteEl('reporteContador').textContent =
+    `${reporteFiltradas.length} de ${reporteFilas.length} registros`;
+
+  const cont = reporteEl('reporteVistaPrevia');
+  cont.replaceChildren();
+
+  if (!reporteFiltradas.length) {
+    cont.textContent = 'No hay registros que coincidan.';
+    return;
+  }
+
+  const columnas = [...new Set(
+    reporteFiltradas.slice(0, 100).flatMap(f => Object.keys(f))
+  )].slice(0, 7);
+
+  const tabla = document.createElement('table');
+  tabla.className = 'tabla';
+
+  const encabezado = tabla.createTHead().insertRow();
+  columnas.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c.replaceAll('_', ' ');
+    encabezado.append(th);
+  });
+
+  const cuerpo = tabla.createTBody();
+
+  reporteFiltradas.slice(0, 20).forEach(f => {
+    const fila = cuerpo.insertRow();
+    columnas.forEach(c => {
+      fila.insertCell().textContent = reporteTexto(f[c]);
+    });
+  });
+
+  const marco = document.createElement('div');
+  marco.className = 'reporte-tabla';
+  marco.append(tabla);
+  cont.append(marco);
+}
+
+function descargarReportePDF() {
+  if (!reporteFiltradas.length) {
+    alert('No hay registros para exportar.');
+    return;
+  }
+
+  const columnas = [...new Set(
+    reporteFiltradas.flatMap(f => Object.keys(f))
+  )];
+
+  const escapar = v => reporteTexto(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  const filas = reporteFiltradas.map(f =>
+    '<tr>' + columnas.map(c =>
+      `<td>${escapar(f[c])}</td>`
+    ).join('') + '</tr>'
+  ).join('');
+
+  const filtros = [
+    `Columna: ${reporteEl('reporteCampo').value || 'Todas'}`,
+    `Valor: ${reporteEl('reporteValor').value || 'Todos'}`,
+    `Estado: ${reporteEl('reporteEstado').value || 'Todos'}`,
+    `Búsqueda: ${reporteEl('reporteBuscar').value || 'Ninguna'}`
+  ].join(' | ');
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reporte CifraControl</title>
+<style>
+@page { size: A4 landscape; margin: 12mm; }
+body { font-family: Arial, sans-serif; color: #26344f; }
+h1 { color: #7562e8; }
+p { color: #65748e; }
+table { width: 100%; border-collapse: collapse; font-size: 9px; }
+th, td { border: 1px solid #ddd; padding: 6px; overflow-wrap: anywhere; }
+th { background: #e9e6ff; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+</style>
+</head>
+<body>
+<h1>CifraControl - Reporte personalizado</h1>
+<p>Fecha: ${escapar(new Date().toLocaleString('es-MX'))}</p>
+<p>Registros: ${reporteFiltradas.length}</p>
+<p>Filtros: ${escapar(filtros)}</p>
+<table>
+<thead><tr>${columnas.map(c => `<th>${escapar(c)}</th>`).join('')}</tr></thead>
+<tbody>${filas}</tbody>
+</table>
+</body>
+</html>`;
+
+  const ventana = window.open('', '_blank');
+
+  if (!ventana) {
+    alert('Permite las ventanas emergentes para exportar.');
+    return;
+  }
+
+  ventana.document.open();
+  ventana.document.write(html);
+  ventana.document.close();
+  ventana.focus();
+  ventana.print();
 }
 
 document.addEventListener('DOMContentLoaded', iniciar);

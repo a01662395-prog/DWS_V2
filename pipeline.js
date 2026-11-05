@@ -364,7 +364,14 @@ def ejecutar_pipeline_en_memoria(nombre_archivo, raw_bytes_js):
       const pyodide = await window.loadPyodide();
 
       if (onProgress) onProgress(40, 'Cargando librerías de ciencia de datos (pandas, numpy, openpyxl)…');
-      await pyodide.loadPackage(['pandas', 'numpy', 'openpyxl']);
+      
+await pyodide.loadPackage(['pandas', 'numpy', 'micropip']);
+
+await pyodide.runPythonAsync(`
+  import micropip
+  await micropip.install('openpyxl')
+`);
+
 
       if (onProgress) onProgress(70, 'Compilando pipeline de limpieza (Partes A y B)…');
       await pyodide.runPythonAsync(CODIGO_PYTHON);
