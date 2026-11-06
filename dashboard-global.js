@@ -237,7 +237,7 @@
     }
 
     const respuesta = await fetch(
-      'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json'
+      'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson'
     );
 
     if (!respuesta.ok) {
@@ -264,41 +264,50 @@
   const nombre = feature.properties.name || '';
 
   const grupos = {
-    america: '#FF585D',
-    europa: '#5C88DA',
-    asia: '#8E3A80',
-    africa: '#6CC24A',
-    oceania: '#D9D9D6'
+    norteamerica: '#5C88DA',
+    centroamerica: '#FF7F32',
+    sudamerica: '#FF585D',
+    neutro: '#34405A'
   };
 
   const pais = paisClave(nombre);
 
-  const america = [
-    'mexico', 'estados unidos', 'canada',
-    'brasil', 'argentina', 'colombia',
-    'chile', 'peru'
+  const norteamerica = [
+    'canada',
+    'estados unidos',
+    'mexico'
   ];
 
-  const europa = [
-    'alemania', 'francia', 'espana',
-    'reino unido', 'italia', 'portugal'
+  const centroamerica = [
+    'belize',
+    'guatemala',
+    'honduras',
+    'el salvador',
+    'nicaragua',
+    'costa rica',
+    'panama'
   ];
 
-  const asia = [
-    'china', 'india', 'japon', 'rusia'
+  const sudamerica = [
+    'colombia',
+    'venezuela',
+    'guyana',
+    'suriname',
+    'ecuador',
+    'peru',
+    'brasil',
+    'bolivia',
+    'paraguay',
+    'chile',
+    'argentina',
+    'uruguay'
   ];
 
-  const africa = ['sudafrica'];
+  if (norteamerica.includes(pais)) return grupos.norteamerica;
+  if (centroamerica.includes(pais)) return grupos.centroamerica;
+  if (sudamerica.includes(pais)) return grupos.sudamerica;
 
-  const oceania = ['australia'];
-
-  if (america.includes(pais)) return grupos.america;
-  if (europa.includes(pais)) return grupos.europa;
-  if (asia.includes(pais)) return grupos.asia;
-  if (africa.includes(pais)) return grupos.africa;
-  if (oceania.includes(pais)) return grupos.oceania;
-
-    return '#34405A';
+  return grupos.neutro;
 })
 
       .polygonSideColor(
@@ -309,7 +318,10 @@
         () => 'rgba(255,255,255,0.22)'
       )
 
+      // Separa las caras del GeoJSON de la textura para evitar z-fighting
+      // (triángulos negros y cortes visuales en WebGL).
       .polygonAltitude(0.012)
+      .polygonCapCurvatureResolution(3)
 
       .polygonLabel(feature => {
         const nombre = String(

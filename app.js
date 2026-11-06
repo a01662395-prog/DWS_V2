@@ -48,7 +48,7 @@ const MODULOS = {
 };
 
 const filtros = {
-  inventario: { search: '', estado: '', tipo: '', sort: 'id', dir: 'asc', page: 1, pageSize: 10 },
+  inventario: { search: '', estado: '', tipo: '', sort: 'id', dir: 'asc', page: 1, pageSize: 100 },
   excepciones: { severidad: '' },
 };
 
@@ -360,7 +360,7 @@ async function apiLocal(ruta, params = {}) {
         const est = clasificarEstadoFila(f);
         const ubicacion = [f.pais, f.region, f.port_category].filter((x) => x && x !== 'No disponible').join(' / ') || 'No disponible';
         const responsable = f.usuario_id || f.fuente_de_datos || 'No asignado';
-        const ultimoAnalisis = f.mes_ultimo_logon || f.last_seen_band || (meta ? meta.procesado_en.slice(0, 10) : '—');
+        const ultimoAnalisis = f.mes_ultimo_logon || f.last_seen_band || (meta ? meta.procesado_en.slice(0, 50) : '—');
         return {
           id: String(id),
           nombre: String(nombre),
@@ -392,7 +392,7 @@ async function apiLocal(ruta, params = {}) {
       const mult = params.dir === 'desc' ? -1 : 1;
       filtradas.sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? ''), 'es', { numeric: true }) * mult);
 
-      const pageSize = Number(params.pageSize) || 10;
+      const pageSize = Number(params.pageSize) || 100;
       const totalPaginas = Math.max(1, Math.ceil(filtradas.length / pageSize));
       const pagina = Math.min(Math.max(1, Number(params.page) || 1), totalPaginas);
       const inicio = (pagina - 1) * pageSize;
@@ -2136,7 +2136,7 @@ function pintarReporte() {
 
   const cuerpo = tabla.createTBody();
 
-  reporteFiltradas.slice(0, 20).forEach(f => {
+  reporteFiltradas.forEach(f => {
     const fila = cuerpo.insertRow();
     columnas.forEach(c => {
       fila.insertCell().textContent = reporteTexto(f[c]);
@@ -2149,7 +2149,7 @@ function pintarReporte() {
   cont.append(marco);
 }
 
-function descargarReportePDF() {
+/*function descargarReportePDF() {
   if (!reporteFiltradas.length) {
     alert('No hay registros para exportar.');
     return;
@@ -2220,5 +2220,216 @@ tr { break-inside: avoid; }
   ventana.focus();
   ventana.print();
 }
+*/
+
+function descargarReportePDF() {
+  if (!reporteFiltradas.length) {
+    alert('No hay registros para exportar.');
+    return;
+  }
+
+  const registros = reporteFiltradas;
+  const texto = v => String(reporteTexto(v) ?? '').trim();
+  const escapar = v => texto(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const normalizar = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+  const columnas = [...new Set(registros.flatMap(f => Object.keys(f)))];
+  const encontrar = (...nombres) => columnas.find(c => nombres.some(n => normalizar(c) === normalizar(n)))
+    || columnas.find(c => nombres.some(n => normalizar(c).includes(normalizar(n))));
+  const campo = (fila, col) => col ? texto(fila[col]) : '';
+  const colId = encontrar('equipo_id', 'id_equipo', 'device_id', 'hostname', 'nombre_equipo');
+  const colSO = encontrar('sistema_operativo', 'sistema operativo', 'os', 'os_name');
+  const colVersion = encontrar('version_so', 'version_os', 'os_version');
+  const colCifrado = encontrar('estado_de_cifrado', 'estado_cifrado', 'encryption_status', 'estado cifrado');
+  const colRegion = encontrar('region', 'región');
+  const colPais = encontrar('pais', 'país', 'country');
+  const colUsuario = encontrar('usuario', 'user', 'usuario_asignado');
+  const colCumplimiento = encontrar('cumplimiento', 'compliance', 'compliant');
+
+  const clasificar = fila => {
+    const estado = normalizar(campo(fila, colCifrado));
+    if (!estado || ['nodisponible', 'sindato', 'sindatos', 'unknown', 'na', 'null', 'undefined', 'notavailable'].includes(estado)) return 'Sin datos';
+    if (['encrypted', 'cifrado', 'cifrada', 'protegido', 'protected', 'fullyencrypted', 'true', 'si', 'yes'].includes(estado)) return 'Cifrado';
+    if (['unencrypted', 'notencrypted', 'sincifrar', 'nocifrado', 'nocifrada', 'unprotected', 'false', 'no', 'decrypted'].includes(estado)) return 'Sin cifrar';
+    return 'Sin datos';
+  };
+
+  const conteo = lista => ({
+    total: lista.length,
+    cifrados: lista.filter(f => clasificar(f) === 'Cifrado').length,
+    sinCifrar: lista.filter(f => clasificar(f) === 'Sin cifrar').length,
+    sinDatos: lista.filter(f => clasificar(f) === 'Sin datos').length
+  });
+
+  const resumen = conteo(registros);
+  const porcentaje = (n, total = resumen.total) => total ? (100 * n / total).toFixed(1) + '%' : '0.0%';
+  const numero = n => n.toLocaleString('es-MX');
+
+  const agrupar = col => {
+    const grupos = new Map();
+    registros.forEach(f => {
+      const clave = campo(f, col) || 'No disponible';
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(f);
+    });
+    return [...grupos.entries()].sort((a, b) => b[1].length - a[1].length);
+  };
+
+  const tablaAgrupada = (titulo, col) => {
+    if (!col) return '';
+    const filas = agrupar(col).map(([nombre, lista]) => {
+      const c = conteo(lista);
+      return `<tr><td>${escapar(nombre)}</td><td class="num">${numero(c.total)}</td><td class="num">${numero(c.cifrados)}</td><td class="num">${numero(c.sinCifrar)}</td><td class="num">${numero(c.sinDatos)}</td><td class="num">${porcentaje(c.cifrados, c.total)}</td></tr>`;
+    }).join('');
+
+    return `<section class="seccion"><h2>${titulo}</h2><table><thead><tr><th>${escapar(col.replaceAll('_', ' '))}</th><th>Equipos</th><th>Cifrados</th><th>Sin cifrar</th><th>Sin datos</th><th>% cifrado</th></tr></thead><tbody>${filas}<tr class="total"><td>Total</td><td class="num">${numero(resumen.total)}</td><td class="num">${numero(resumen.cifrados)}</td><td class="num">${numero(resumen.sinCifrar)}</td><td class="num">${numero(resumen.sinDatos)}</td><td class="num">${porcentaje(resumen.cifrados)}</td></tr></tbody></table></section>`;
+  };
+
+  const detalleCols = [
+    ['Equipo', colId],
+    ['Sistema operativo', colSO],
+    ['Versión', colVersion],
+    ['Estado de cifrado', colCifrado],
+    ['Región', colRegion],
+    ['País', colPais],
+    ['Usuario', colUsuario],
+    ['Cumplimiento', colCumplimiento]
+  ].filter(([, col]) => !!col);
+
+  const detalle = detalleCols.length
+    ? `<section class="seccion detalle">
+        <h2>Detalle de equipos (${numero(registros.length)})</h2>
+        <table>
+          <thead><tr>${detalleCols.map(([nombre]) => `<th>${escapar(nombre)}</th>`).join('')}</tr></thead>
+          <tbody>${registros.map(f => `<tr>${detalleCols.map(([, col]) => `<td>${escapar(campo(f, col) || '—')}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </section>`
+    : '';
+
+  const filtros = [
+    ['Columna', reporteEl('reporteCampo')?.value || 'Todas'],
+    ['Valor', reporteEl('reporteValor')?.value || 'Todos'],
+    ['Estado', reporteEl('reporteEstado')?.value || 'Todos'],
+    ['Búsqueda', reporteEl('reporteBuscar')?.value || 'Ninguna']
+  ].map(([k, v]) => `<strong>${escapar(k)}:</strong> ${escapar(v)}`).join(' · ');
+
+  const fecha = new Date().toLocaleString('es-MX');
+
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reporte CifraControl</title>
+<style>
+  @page { size: A4 portrait; margin: 16mm 13mm 17mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #24344c; font-size: 10px; line-height: 1.45; margin: 0; }
+  .cabecera { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #263c58; padding-bottom: 13px; margin-bottom: 16px; }
+  .eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 1.1px; color: #667085; }
+  h1 { font-size: 21px; line-height: 1.2; margin: 6px 0 10px; color: #233951; }
+  .meta { color: #647084; font-size: 10px; }
+  .confidencial { border: 1px solid #a63d46; color: #a63d46; border-radius: 4px; padding: 5px 8px; font-size: 9px; font-weight: bold; letter-spacing: .7px; }
+  .filtros { padding: 11px 12px; background: #f3f5f8; border: 1px solid #e3e7ed; border-radius: 5px; margin-bottom: 20px; }
+  .filtros strong { color: #293b52; }
+  .seccion { margin: 0 0 21px; break-inside: auto; }
+  h2 { font-size: 13px; color: #253b55; margin: 0 0 9px; break-after: avoid; }
+  .indicadores { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #e0e5eb; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+  .indicador { padding: 12px 10px; border-right: 1px solid #e0e5eb; }
+  .indicador:last-child { border-right: 0; }
+  .indicador .etiqueta { color: #687487; font-size: 9px; }
+  .indicador .valor { font-size: 22px; font-weight: bold; color: #253b55; }
+  .indicador .valor.rojo { color: #b03a43; }
+  .indicador .valor.gris { color: #707986; }
+  .indicador .porcentaje { color: #687487; }
+  .barra { display: flex; height: 8px; overflow: hidden; border-radius: 3px; margin: 10px 0; background: #e0e4e9; }
+  .barra span { display: block; height: 100%; }
+  .resumen-texto { margin: 8px 0 0; color: #526174; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9px; }
+  th { background: #eef1f5; color: #27384d; font-weight: 700; text-align: left; }
+  th, td { padding: 7px 6px; border-bottom: 1px solid #e4e8ed; overflow-wrap: break-word; word-break: normal; vertical-align: top; }
+  td.num { text-align: right; white-space: nowrap; }
+  tr.total { font-weight: bold; border-top: 1px solid #9ba6b6; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  .detalle { break-before: page; }
+  .detalle table { font-size: 8px; }
+  .detalle th, .detalle td { padding: 6px 4px; }
+  .pie { margin-top: 24px; border-top: 1px solid #d9dfe6; padding-top: 9px; font-size: 9px; color: #667085; }
+  @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+  <header class="cabecera">
+    <div>
+      <div class="eyebrow">PANEL DE CIFRADO DE DISCOS · REPORTE</div>
+      <h1>Estado de cifrado de discos duros</h1>
+      <div class="meta">Generado: ${escapar(fecha)} · Equipos en el reporte: ${numero(resumen.total)}</div>
+    </div>
+    <div class="confidencial">CONFIDENCIAL</div>
+  </header>
+
+  <div class="filtros">
+    <strong>Filtros aplicados</strong>
+    <div>${filtros}</div>
+  </div>
+
+  <section class="seccion">
+    <h2>1. Resumen</h2>
+    <div class="indicadores">
+      <div class="indicador"><div class="etiqueta">Total de equipos</div><div class="valor">${numero(resumen.total)}</div><div class="porcentaje">100.0%</div></div>
+      <div class="indicador"><div class="etiqueta">Cifrados</div><div class="valor">${numero(resumen.cifrados)}</div><div class="porcentaje">${porcentaje(resumen.cifrados)}</div></div>
+      <div class="indicador"><div class="etiqueta">Sin cifrar</div><div class="valor rojo">${numero(resumen.sinCifrar)}</div><div class="porcentaje">${porcentaje(resumen.sinCifrar)}</div></div>
+      <div class="indicador"><div class="etiqueta">Sin datos</div><div class="valor gris">${numero(resumen.sinDatos)}</div><div class="porcentaje">${porcentaje(resumen.sinDatos)}</div></div>
+    </div>
+
+    <div class="barra">
+      <span style="width:${100 * resumen.cifrados / resumen.total}%;background:#263c58"></span>
+      <span style="width:${100 * resumen.sinCifrar / resumen.total}%;background:#b03a43"></span>
+      <span style="width:${100 * resumen.sinDatos / resumen.total}%;background:#aeb6c1"></span>
+    </div>
+
+    <p class="resumen-texto">
+      De ${numero(resumen.total)} equipos incluidos, ${numero(resumen.cifrados)} están cifrados
+      (${porcentaje(resumen.cifrados)}), ${numero(resumen.sinCifrar)} están sin cifrar
+      (${porcentaje(resumen.sinCifrar)}) y ${numero(resumen.sinDatos)} no tienen un estado de
+      cifrado reconocido (${porcentaje(resumen.sinDatos)}).
+    </p>
+  </section>
+
+  ${tablaAgrupada('2. Estado por región', colRegion)}
+  ${tablaAgrupada('3. Estado por sistema operativo', colSO)}
+  ${tablaAgrupada('4. Estado por país', colPais)}
+  ${detalle}
+
+  <footer class="pie">
+    CifraControl · Confidencial · Uso interno · Reporte generado con los filtros seleccionados
+  </footer>
+</body>
+</html>`;
+
+  const ventana = window.open('', '_blank');
+  if (!ventana) {
+    alert('Permite las ventanas emergentes para exportar.');
+    return;
+  }
+
+  ventana.document.open();
+  ventana.document.write(html);
+  ventana.document.close();
+  ventana.focus();
+
+  let impreso = false;
+  const imprimir = () => {
+    if (impreso || ventana.closed) return;
+    impreso = true;
+    ventana.focus();
+    ventana.print();
+  };
+
+  ventana.addEventListener('load', imprimir, { once: true });
+  setTimeout(imprimir, 900);
+}
+
 
 document.addEventListener('DOMContentLoaded', iniciar);
