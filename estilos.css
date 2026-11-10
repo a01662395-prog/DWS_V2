@@ -1133,24 +1133,44 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   position: absolute; inset: 0 0 auto; height: 2px;
   background: var(--kpi-color, var(--femsa-600)); content: '';
 }
-.global-kpi:nth-child(1) { --kpi-color: var(--femsa-600); }
-.global-kpi:nth-child(2) { --kpi-color: var(--exito); }
-.global-kpi:nth-child(3) { --kpi-color: var(--info); }
-.global-kpi:nth-child(4) { --kpi-color: var(--peligro); }
+.global-kpi:nth-child(1),
+.global-kpi:nth-child(2),
+.global-kpi:nth-child(3),
+.global-kpi:nth-child(4) { --kpi-color: var(--femsa-600); }
 .global-kpi span { display: block; color: var(--texto-med); font-size: 12px; font-weight: 500; }
 .global-kpi strong {
   display: block; margin-top: 12px; color: var(--texto); font-family: var(--mono);
   font-size: 24px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;
   text-align: right; font-variant-numeric: tabular-nums;
 }
-.global-mapa-tarjeta { margin-bottom: 16px; }
+.global-mapa-tarjeta { width: 68%; margin: 0 auto 16px 0; }
 .global-mapa-tarjeta .tarjeta__cab h2 { color: var(--texto); }
 .global-mapa-tarjeta .tarjeta__cab p, .global-nota { color: var(--texto-baj); }
 #mapaMundial {
-  width: 100%; height: 380px; min-height: 320px; overflow: hidden; position: relative;
+  width: 100%; height: 330px; min-height: 300px; margin-inline: auto;
+  overflow: hidden; position: relative;
   border: 1px solid var(--borde); border-radius: var(--r); background: #f4f6fb;
 }
 #mapaMundial canvas { display: block; }
+.global-mapa-svg { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.global-mapa-svg.is-arrastrando { cursor: grabbing; }
+.global-mapa-controles {
+  position: absolute; z-index: 2; top: 10px; right: 10px;
+  display: flex; gap: 4px; padding: 4px;
+  background: rgba(255,255,255,.94); border: 1px solid var(--borde);
+  border-radius: var(--r-sm); box-shadow: var(--sombra-sm);
+}
+.global-mapa-zoom-btn {
+  width: 28px; height: 28px; padding: 0; border: 1px solid var(--borde);
+  border-radius: 4px; background: var(--superficie); color: var(--texto);
+  font-size: 16px; line-height: 1; cursor: pointer;
+}
+.global-mapa-zoom-btn:hover { background: var(--fondo-alt); }
+.global-mapa-zoom-btn:active { transform: scale(.96); }
+.global-mapa-zoom-btn:focus-visible { outline: 2px solid var(--femsa-600); outline-offset: 1px; }
+.global-mapa-pais { cursor: pointer; transition: opacity 120ms ease, filter 120ms ease; }
+.global-mapa-pais:hover,
+.global-mapa-pais.is-seleccionado { filter: brightness(1.08); }
 .global-nota { margin: 10px 0 0; font-size: 11.5px; }
 .global-detalles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .global-detalles .tarjeta__cuerpo { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -1163,5 +1183,6 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 @media (max-width: 600px) {
   .vista[data-vista="dashboard"] .dashboard-global-cab { flex-direction: column; align-items: stretch; }
   .global-filtros, .global-kpis, .global-detalles { grid-template-columns: 1fr; }
-  #mapaMundial { height: 320px; min-height: 280px; }
+  .global-mapa-tarjeta { width: 100%; }
+  #mapaMundial { width: 100%; height: 300px; min-height: 270px; }
 }

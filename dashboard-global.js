@@ -52,7 +52,17 @@
     return alias[clave] || clave;
   };
 
-  let globo = null;
+  let mapaSvg = null;
+  let mapaPaises = [];
+  let mapaGrupo = null;
+  let mapaZoom = 1;
+  let mapaPanX = 0;
+  let mapaPanY = 0;
+  let mapaArrastrando = false;
+  let mapaSeMovio = false;
+  let mapaInicioX = 0;
+  let mapaInicioY = 0;
+  let mapaUltimoArrastre = 0;
   let filas = [];
   let iniciando = false;
   let iniciado = false;
@@ -120,21 +130,7 @@
       [region, pais, estado].filter(Boolean).join(' · ') ||
       'Vista global · Todos los países';
 
-    if (globo) {
-      globo
-        .polygonAltitude(feature =>
-          pais &&
-          paisClave(feature.properties.name) === paisClave(pais)
-            ? 0.045
-            : 0.012
-        )
-        .polygonStrokeColor(feature =>
-          pais &&
-          paisClave(feature.properties.name) === paisClave(pais)
-            ? '#FFFFFF'
-            : 'rgba(255,255,255,0.22)'
-        );
-    }
+    actualizarSeleccionMapa(pais);
   }
 
   function llenarPaises() {
@@ -206,13 +202,11 @@
       pintar();
 
       if (!iniciado) {
-        await crearGlobo();
+        await crearMapa2D();
       }
 
       setTimeout(() => {
-        if (globo) {
-          globo.width($('mapaMundial').clientWidth);
-        }
+        ajustarMapa2D();
       }, 100);
 
     } catch (error) {
@@ -226,15 +220,158 @@
     }
   }
 
-  async function crearGlobo() {
-    const contenedor = $('mapaMundial');
+  function proyectar([longitud, latitud]) {
+    return [
+      ((longitud + 180) / 360) * 960,
+      ((90 - latitud) / 180) * 480
+    ];
+  }
 
-    if (!window.Globe) {
-      contenedor.textContent =
-        'No se pudo cargar la biblioteca 3D. ' +
-        'Comprueba tu conexión a Internet.';
-      return;
+  function crearRutaAnillo(anillo) {
+    return anillo
+      .map((coordenada, indice) => {
+        const [x, y] = proyectar(coordenada);
+        return `${indice === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(' ') + ' Z';
+  }
+
+  function crearRutaGeometria(geometria) {
+    if (geometria.type === 'Polygon') {
+      return geometria.coordinates.map(crearRutaAnillo).join(' ');
     }
+
+    if (geometria.type === 'MultiPolygon') {
+      return geometria.coordinates
+        .flatMap(poligono => poligono.map(crearRutaAnillo))
+        .join(' ');
+    }
+
+    return '';
+  }
+
+  function colorPais(nombre) {
+    const pais = paisClave(nombre);
+    const norteamerica = ['canada', 'estados unidos', 'mexico'];
+    const centroamerica = [
+      'belize', 'guatemala', 'honduras', 'el salvador',
+      'nicaragua', 'costa rica', 'panama'
+    ];
+    const sudamerica = [
+      'colombia', 'venezuela', 'guyana', 'suriname', 'ecuador',
+      'peru', 'brasil', 'bolivia', 'paraguay', 'chile',
+      'argentina', 'uruguay'
+    ];
+
+    if (norteamerica.includes(pais)) return '#5C88DA';
+    if (centroamerica.includes(pais)) return '#FF7F32';
+    if (sudamerica.includes(pais)) return '#FF585D';
+    return '#D9DDE8';
+  }
+
+  function ajustarMapa2D() {
+    if (!mapaSvg) return;
+
+    const contenedor = $('mapaMundial');
+    mapaSvg.setAttribute('width', String(contenedor.clientWidth));
+    mapaSvg.setAttribute('height', String(Math.max(320, contenedor.clientHeight)));
+  }
+
+  function aplicarZoomMapa() {
+    if (!mapaGrupo) return;
+
+    mapaGrupo.setAttribute(
+      'transform',
+      `translate(${mapaPanX} ${mapaPanY}) translate(480 240) scale(${mapaZoom}) translate(-480 -240)`
+    );
+  }
+
+  function activarArrastreMapa(svg) {
+    svg.addEventListener('pointerdown', evento => {
+      if (evento.button !== 0) return;
+
+      mapaArrastrando = true;
+      mapaSeMovio = false;
+      mapaInicioX = evento.clientX - mapaPanX;
+      mapaInicioY = evento.clientY - mapaPanY;
+      svg.setPointerCapture(evento.pointerId);
+      svg.classList.add('is-arrastrando');
+    });
+
+    svg.addEventListener('pointermove', evento => {
+      if (!mapaArrastrando) return;
+
+      const siguienteX = evento.clientX - mapaInicioX;
+      const siguienteY = evento.clientY - mapaInicioY;
+
+      if (Math.abs(siguienteX - mapaPanX) > 2 || Math.abs(siguienteY - mapaPanY) > 2) {
+        mapaSeMovio = true;
+      }
+
+      mapaPanX = siguienteX;
+      mapaPanY = siguienteY;
+      aplicarZoomMapa();
+    });
+
+    const terminarArrastre = evento => {
+      if (!mapaArrastrando) return;
+
+      mapaArrastrando = false;
+      mapaUltimoArrastre = mapaSeMovio ? performance.now() : 0;
+      if (svg.hasPointerCapture(evento.pointerId)) {
+        svg.releasePointerCapture(evento.pointerId);
+      }
+      svg.classList.remove('is-arrastrando');
+    };
+
+    svg.addEventListener('pointerup', terminarArrastre);
+    svg.addEventListener('pointercancel', terminarArrastre);
+  }
+
+  function crearControlesZoom() {
+    const controles = document.createElement('div');
+    controles.className = 'global-mapa-controles';
+
+    const crearBoton = (texto, etiqueta, cambio) => {
+      const boton = document.createElement('button');
+      boton.type = 'button';
+      boton.className = 'global-mapa-zoom-btn';
+      boton.textContent = texto;
+      boton.setAttribute('aria-label', etiqueta);
+      boton.addEventListener('click', () => {
+        mapaZoom = cambio === 0
+          ? 1
+          : Math.min(3, Math.max(1, mapaZoom + cambio));
+        if (cambio === 0) {
+          mapaPanX = 0;
+          mapaPanY = 0;
+        }
+        aplicarZoomMapa();
+      });
+      return boton;
+    };
+
+    controles.append(
+      crearBoton('+', 'Acercar mapa', 0.25),
+      crearBoton('−', 'Alejar mapa', -0.25),
+      crearBoton('↺', 'Restablecer zoom del mapa', 0)
+    );
+
+    return controles;
+  }
+
+  function actualizarSeleccionMapa(paisSeleccionado) {
+    mapaPaises.forEach(({ elemento, feature }) => {
+      const seleccionado = paisSeleccionado &&
+        paisClave(feature.properties.name) === paisClave(paisSeleccionado);
+
+      elemento.classList.toggle('is-seleccionado', seleccionado);
+      elemento.setAttribute('stroke-width', seleccionado ? '1.8' : '0.55');
+    });
+  }
+
+  async function crearMapa2D() {
+    const contenedor = $('mapaMundial');
 
     const respuesta = await fetch(
       'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson'
@@ -247,109 +384,28 @@
     const geo = await respuesta.json();
     const paises = geo.features;
 
-    globo = Globe()(contenedor)
-      .width(contenedor.clientWidth)
-      .height(Math.max(380, contenedor.clientHeight))
-      .backgroundColor('rgba(0,0,0,0)')
-      .showAtmosphere(true)
-      .atmosphereColor('#5C88DA')
-      .atmosphereAltitude(0.18)
-      .globeImageUrl(
-        'https://unpkg.com/three-globe/example/img/earth-dark.jpg'
-      )
-      .polygonsData(paises)
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 960 480');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Mapa mundial 2D');
+    svg.classList.add('global-mapa-svg');
+    mapaGrupo = document.createElementNS(SVG_NS, 'g');
+    svg.appendChild(mapaGrupo);
 
-      
-.polygonCapColor(feature => {
-  const nombre = feature.properties.name || '';
-
-  const grupos = {
-    norteamerica: '#5C88DA',
-    centroamerica: '#FF7F32',
-    sudamerica: '#FF585D',
-    neutro: '#34405A'
-  };
-
-  const pais = paisClave(nombre);
-
-  const norteamerica = [
-    'canada',
-    'estados unidos',
-    'mexico'
-  ];
-
-  const centroamerica = [
-    'belize',
-    'guatemala',
-    'honduras',
-    'el salvador',
-    'nicaragua',
-    'costa rica',
-    'panama'
-  ];
-
-  const sudamerica = [
-    'colombia',
-    'venezuela',
-    'guyana',
-    'suriname',
-    'ecuador',
-    'peru',
-    'brasil',
-    'bolivia',
-    'paraguay',
-    'chile',
-    'argentina',
-    'uruguay'
-  ];
-
-  if (norteamerica.includes(pais)) return grupos.norteamerica;
-  if (centroamerica.includes(pais)) return grupos.centroamerica;
-  if (sudamerica.includes(pais)) return grupos.sudamerica;
-
-  return grupos.neutro;
-})
-
-      .polygonSideColor(
-        () => 'rgba(255,255,255,0.09)'
-      )
-
-      .polygonStrokeColor(
-        () => 'rgba(255,255,255,0.22)'
-      )
-
-      // Separa las caras del GeoJSON de la textura para evitar z-fighting
-      // (triángulos negros y cortes visuales en WebGL).
-      .polygonAltitude(0.012)
-      .polygonCapCurvatureResolution(3)
-
-      .polygonLabel(feature => {
-        const nombre = String(
-          feature.properties.name || ''
-        ).replace(/&/g, '&amp;')
-         .replace(/</g, '&lt;')
-         .replace(/>/g, '&gt;');
-
-        return `
-          <div style="
-            background:#111827;
-            color:white;
-            padding:8px 12px;
-            border:1px solid #5C88DA;
-            border-radius:8px;
-          ">
-            ${nombre}
-          </div>
-        `;
-      })
-
-      .onPolygonClick(feature => {
-        const nombre = paisClave(
-          feature.properties.name
-        );
+    mapaPaises = paises.map(feature => {
+      const elemento = document.createElementNS(SVG_NS, 'path');
+      elemento.setAttribute('d', crearRutaGeometria(feature.geometry));
+      elemento.setAttribute('fill', colorPais(feature.properties.name));
+      elemento.setAttribute('stroke', 'rgba(255,255,255,0.7)');
+      elemento.setAttribute('stroke-width', '0.55');
+      elemento.setAttribute('vector-effect', 'non-scaling-stroke');
+      elemento.classList.add('global-mapa-pais');
+      elemento.addEventListener('click', () => {
+        if (performance.now() - mapaUltimoArrastre < 150) return;
 
         const selector = $('globalPais');
-
+        const nombre = paisClave(feature.properties.name);
         const opcion = [...selector.options].find(
           item => paisClave(item.value) === nombre
         );
@@ -362,23 +418,28 @@
             `${feature.properties.name} · Sin registros asociados`;
         }
       });
+      mapaGrupo.appendChild(elemento);
+      return { elemento, feature };
+    });
 
-    globo.pointOfView({
-      lat: 15,
-      lng: -35,
-      altitude: 2.25
-    }, 0);
+    contenedor.replaceChildren(crearControlesZoom(), svg);
+    mapaSvg = svg;
+    mapaZoom = 1;
+    mapaPanX = 0;
+    mapaPanY = 0;
+    aplicarZoomMapa();
+    ajustarMapa2D();
+    actualizarSeleccionMapa($('globalPais')?.value || '');
+    activarArrastreMapa(svg);
 
-    globo.controls().autoRotate = false;
-    globo.controls().enableDamping = true;
+    svg.addEventListener('wheel', evento => {
+      evento.preventDefault();
+      mapaZoom = Math.min(3, Math.max(1, mapaZoom + (evento.deltaY < 0 ? 0.15 : -0.15)));
+      aplicarZoomMapa();
+    }, { passive: false });
 
     window.addEventListener('resize', () => {
-      if (
-        globo &&
-        !contenedor.closest('[hidden]')
-      ) {
-        globo.width(contenedor.clientWidth);
-      }
+      if (!contenedor.closest('[hidden]')) ajustarMapa2D();
     });
 
     iniciado = true;
