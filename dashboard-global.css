@@ -472,3 +472,99 @@
 .global-multi-menu input {
   accent-color: #9b2c39;
 }
+
+
+/* GRÁFICA DE CUMPLIMIENTO */
+
+#globalCumplimientoGrafica {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 18px 4px;
+}
+
+.global-cumplimiento-barra {
+  display: flex;
+  width: 100%;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--fondo-alt);
+}
+
+.global-cumplimiento-barra > div {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.global-cumplimiento-resumen {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.global-cumplimiento-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.global-cumplimiento-item strong {
+  font-size: clamp(17px, 2vw, 25px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.global-cumplimiento-item span {
+  font-size: 12px;
+  color: var(--texto-med);
+}
+
+@media (max-width: 600px) {
+  .global-cumplimiento-resumen {
+    gap: 8px;
+  }
+
+  .global-cumplimiento-item strong {
+    font-size: 18px;
+  }
+
+  .global-cumplimiento-item span {
+    font-size: 11px;
+  }
+}
+/* Cumplimiento más compacto */
+
+#globalCumplimientoGrafica {
+  gap: 14px;
+  padding: 8px 4px;
+}
+
+.global-cumplimiento-barra {
+  height: 12px;
+}
+
+.global-cumplimiento-resumen {
+  gap: 8px;
+}
+
+.global-cumplimiento-item {
+  gap: 3px;
+}
+
+.global-cumplimiento-item strong {
+  font-size: 20px;
+}
+
+.global-cumplimiento-item span {
+  font-size: 11px;
+}
+
+/* Subir las gráficas inferiores */
+
+.global-graficas-inferiores {
+  margin-top: -180px;
+  position: relative;
+  z-index: 1;
+}

@@ -502,79 +502,86 @@ function pintarGraficaSO(filtradas) {
 }
 
 
-function pintarGraficaRecencia(filtradas) {
-  const contenedor = $('globalRecenciaGrafica');
+
+function pintarGraficaCumplimiento(filtradas) {
+  const contenedor = $('globalCumplimientoGrafica');
   if (!contenedor) return;
 
   contenedor.replaceChildren();
 
+  const total = filtradas.length;
+
   const categorias = [
-    { nombre: '0-30 días', clave: '0-30', cantidad: 0 },
-    { nombre: '31-90 días', clave: '31-90', cantidad: 0 },
-    { nombre: '91-180 días', clave: '91-180', cantidad: 0 },
-    { nombre: '>180 días', clave: '>180', cantidad: 0 },
-    { nombre: 'No disponible', clave: 'no disponible', cantidad: 0 }
+    {
+      nombre: 'Cumple',
+      clave: 'protegido',
+      color: '#32658B'
+    },
+    {
+      nombre: 'No cumple',
+      clave: 'sin_cifrar',
+      color: '#E86B20'
+    },
+    {
+      nombre: 'No evaluado',
+      clave: 'parcial',
+      color: '#9CA3AF'
+    }
   ];
 
-  const normalizarTexto = texto => String(texto ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+  const conteos = {
+    protegido: 0,
+    sin_cifrar: 0,
+    parcial: 0
+  };
 
   filtradas.forEach(fila => {
-    if (clasificarEstadoFila(fila) !== 'sin_cifrar') return;
+    const estado = clasificarEstadoFila(fila);
 
-    const columna = Object.keys(fila).find(clave =>
-      normalizarTexto(clave).replace(/[^a-z0-9]/g, '') === 'bandarecencia'
-    );
-
-    const valor = normalizarTexto(columna ? fila[columna] : '')
-      .replace(/\s+/g, '');
-
-    let indice = 4;
-
-    if (valor.startsWith('0-30')) indice = 0;
-    else if (valor.startsWith('31-90')) indice = 1;
-    else if (valor.startsWith('91-180')) indice = 2;
-    else if (valor.includes('>180')) indice = 3;
-
-    categorias[indice].cantidad++;
+    if (estado === 'protegido') {
+      conteos.protegido++;
+    } else if (estado === 'sin_cifrar') {
+      conteos.sin_cifrar++;
+    } else {
+      conteos.parcial++;
+    }
   });
 
-  const maximo = Math.max(1, ...categorias.map(c => c.cantidad));
+  const barra = document.createElement('div');
+  barra.className = 'global-cumplimiento-barra';
 
-  categorias.forEach((categoria, indice) => {
-    const columna = document.createElement('div');
-    columna.className = 'global-recencia-item';
+  const resumen = document.createElement('div');
+  resumen.className = 'global-cumplimiento-resumen';
 
-    const espacio = document.createElement('div');
-    espacio.className = 'global-recencia-espacio';
-
-    const circulo = document.createElement('div');
-    circulo.className = 'global-recencia-circulo';
-
-    const tamano = categoria.cantidad
-      ? 20 + Math.sqrt(categoria.cantidad / maximo) * 60
+  categorias.forEach(categoria => {
+    const cantidad = conteos[categoria.clave];
+    const porcentaje = total
+      ? (cantidad / total) * 100
       : 0;
 
-    circulo.style.width = `${tamano}px`;
-    circulo.style.height = `${tamano}px`;
-    circulo.style.backgroundColor =
-      indice === 3 ? '#E94B0C' : '#F3B28E';
+    const segmento = document.createElement('div');
+    segmento.style.width = `${porcentaje}%`;
+    segmento.style.backgroundColor = categoria.color;
+    segmento.title =
+      `${categoria.nombre}: ${cantidad} equipos (${porcentaje.toFixed(1)}%)`;
 
-    espacio.append(circulo);
+    barra.appendChild(segmento);
 
-    const cantidad = document.createElement('strong');
-    cantidad.textContent = categoria.cantidad.toLocaleString('es-MX');
+    const item = document.createElement('div');
+    item.className = 'global-cumplimiento-item';
+
+    const valor = document.createElement('strong');
+    valor.textContent = `${porcentaje.toFixed(1)}%`;
+    valor.style.color = categoria.color;
 
     const nombre = document.createElement('span');
     nombre.textContent = categoria.nombre;
 
-    columna.append(espacio, cantidad, nombre);
-    contenedor.append(columna);
+    item.append(valor, nombre);
+    resumen.appendChild(item);
   });
+
+  contenedor.append(barra, resumen);
 }
 
   function actualizarGraficas(filtradas) {
@@ -738,7 +745,7 @@ $('globalBarraSinCifrar').style.width =
   'Vista global · Todos los países';
 
     actualizarGraficas(filtradas);
-    pintarGraficaRecencia(filtradas);
+    pintarGraficaCumplimiento(filtradas);
     pintarGraficaSO(filtradas);
 
     actualizarSeleccionMapa(paises.length === 1 ? paises[0] : '');

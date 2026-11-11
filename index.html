@@ -82,6 +82,7 @@
           <use href="#i-resumen"></use>
         </svg>
         <span class="nav__txt">Dashboard global</span>
+        </a>
       <a class="nav__link" data-ir="inventario" href="#/inventario">
         <svg class="ico"><use href="#i-inventario"></use></svg><span class="nav__txt">Inventario</span>
         <b class="nav__badge" data-badge="inventario" hidden>0</b>
@@ -298,7 +299,7 @@
               </div>
               <div class="fallo" data-fallo hidden>
                 <svg class="ico ico--grande"><use href="#i-wifi-off"></use></svg>
-                <h3>El monitoreo no respondió</h3>
+                <h3>No se pudo cargar el monitoreo</h3>
                 <p data-fallo-msg></p>
                 <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar conexión</button>
               </div>
@@ -504,13 +505,13 @@
   <article class="tarjeta global-recencia-tarjeta">
     <header class="tarjeta__cab">
       <div>
-        <h2>Equipos sin cifrar según su último acceso</h2>
-        <p>El tamaño del círculo representa la cantidad de equipos sin cifrar.</p>
+        <h2>Cumplimiento</h2>
+        <p>Estado de cifrado reportado por los equipos</p>
       </div>
     </header>
 
     <div class="tarjeta__cuerpo">
-      <div id="globalRecenciaGrafica"></div>
+      <div id="globalCumplimientoGrafica"></div>
     </div>
   </article>
 
@@ -527,7 +528,7 @@
     <div id="globalSOGrafica"></div>
   </div>
 </article>
-
+</div>
 
 </section>
 
