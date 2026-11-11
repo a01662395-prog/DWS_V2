@@ -82,18 +82,9 @@
           <use href="#i-resumen"></use>
         </svg>
         <span class="nav__txt">Dashboard global</span>
-      </a>
-      <p class="nav__titulo">Navegación</p>
-      <a class="nav__link is-activo" data-ir="resumen" href="#/resumen">
-        <svg class="ico"><use href="#i-resumen"></use></svg><span class="nav__txt">Resumen de cifrado</span>
-      </a>
       <a class="nav__link" data-ir="inventario" href="#/inventario">
         <svg class="ico"><use href="#i-inventario"></use></svg><span class="nav__txt">Inventario</span>
         <b class="nav__badge" data-badge="inventario" hidden>0</b>
-      </a>
-      <a class="nav__link" data-ir="tecnologias" href="#/tecnologias">
-        <svg class="ico"><use href="#i-chip"></use></svg><span class="nav__txt">Tecnologías</span>
-        <b class="nav__badge nav__badge--alerta" data-badge="tecnologias" hidden>0</b>
       </a>
       <a class="nav__link" data-ir="monitoreo" href="#/monitoreo">
         <svg class="ico"><use href="#i-actividad"></use></svg><span class="nav__txt">Monitoreo</span>
@@ -147,10 +138,6 @@
       </div>
 
       <div class="barra__acciones">
-        <span class="pastilla" id="pastillaApi" data-estado="comprobando" title="Estado de la API">
-          <span class="pastilla__punto"></span><span id="pastillaApiTxt">Comprobando…</span>
-        </span>
-
         <div class="popover" id="popNotificaciones">
           <button class="btn-icon" id="btnNotificaciones" aria-label="Notificaciones" aria-expanded="false">
             <svg class="ico"><use href="#i-campana"></use></svg>
@@ -257,7 +244,7 @@
         <div class="modulo" data-modulo="inventario">
           <article class="tarjeta">
             <header class="tarjeta__cab">
-              <div><h2>Inventario de activos</h2><p>Servidores, bases de datos, endpoints y almacenes</p></div>
+              <div><h2>Inventario de equipos</h2><p>Consulta y administra los equipos registrados, su información y estado de cifrado</p></div>
               <div class="filtros">
                 <label class="campo campo--buscar">
                   <svg class="ico"><use href="#i-buscar"></use></svg>
@@ -289,31 +276,6 @@
                 <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar conexión</button>
               </div>
               <div data-datos="inventario"></div>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           VISTA 3 · TECNOLOGÍAS
-           ================================================================ -->
-      <section class="vista" data-vista="tecnologias" hidden>
-        <div class="modulo" data-modulo="tecnologias">
-          <article class="tarjeta">
-            <header class="tarjeta__cab">
-              <div><h2>Stack tecnológico</h2><p>Versiones detectadas y riesgo asociado</p></div>
-            </header>
-            <div class="tarjeta__cuerpo">
-              <div class="skel-esq" data-skel>
-                <div class="skel skel--linea"></div><div class="skel skel--linea"></div><div class="skel skel--linea"></div><div class="skel skel--linea"></div>
-              </div>
-              <div class="fallo" data-fallo hidden>
-                <svg class="ico ico--grande"><use href="#i-wifi-off"></use></svg>
-                <h3>El inventario tecnológico no se pudo cargar</h3>
-                <p data-fallo-msg></p>
-                <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar conexión</button>
-              </div>
-              <div data-datos="tecnologias"></div>
             </div>
           </article>
         </div>
@@ -355,8 +317,8 @@
 
   <div class="dashboard-global-cab">
     <div>
-      <h2>Explorador mundial</h2>
-      <p>Analiza los registros de cifrado por país y región.</p>
+      <h2>Mapa de resultados</h2>
+      <p>Analiza los registros de cifrado por país y región</p>
     </div>
 
     <button class="btn" id="globalLimpiar">
@@ -365,107 +327,210 @@
   </div>
 
   <!-- FILTROS -->
-  <div class="global-filtros">
-    <label>
-      Región
-      <select class="campo" id="globalRegion">
-        <option value="">Todas las regiones</option>
-      </select>
-    </label>
 
-    <label>
-      País
-      <select class="campo" id="globalPais">
-        <option value="">Todos los países</option>
-      </select>
-    </label>
+<!-- FILTROS MULTISELECCIÓN -->
+<div class="global-filtros">
 
-    <label>
-      Estado de cifrado
-      <select class="campo" id="globalEstado">
-        <option value="">Todos los estados</option>
-        <option value="protegido">Protegido</option>
-        <option value="parcial">Parcial</option>
-        <option value="sin_cifrar">Sin cifrar</option>
-      </select>
-    </label>
+  <div class="global-filtro-multi">
+    <label id="globalRegionLabel">Región</label>
+    <div class="global-multi" data-filtro="region">
+      <button type="button" class="global-multi-boton"
+              aria-labelledby="globalRegionLabel"
+              aria-expanded="false">
+        <span class="global-multi-texto">Todas las regiones</span>
+        <span>⌄</span>
+      </button>
+      <div class="global-multi-menu" id="globalRegionOpciones" hidden></div>
+    </div>
   </div>
+
+  <div class="global-filtro-multi">
+    <label id="globalPaisLabel">País</label>
+    <div class="global-multi" data-filtro="pais">
+      <button type="button" class="global-multi-boton"
+              aria-labelledby="globalPaisLabel"
+              aria-expanded="false">
+        <span class="global-multi-texto">Todos los países</span>
+        <span>⌄</span>
+      </button>
+      <div class="global-multi-menu" id="globalPaisOpciones" hidden></div>
+    </div>
+  </div>
+
+  <div class="global-filtro-multi">
+    <label id="globalEstadoLabel">Estado de cifrado</label>
+    <div class="global-multi" data-filtro="estado">
+      <button type="button" class="global-multi-boton"
+              aria-labelledby="globalEstadoLabel"
+              aria-expanded="false">
+        <span class="global-multi-texto">Todos los estados</span>
+        <span>⌄</span>
+      </button>
+      <div class="global-multi-menu" id="globalEstadoOpciones" hidden>
+        <label><input type="checkbox" value="protegido"> Protegido</label>
+        <label><input type="checkbox" value="parcial"> Parcial</label>
+        <label><input type="checkbox" value="sin_cifrar"> Sin cifrar</label>
+      </div>
+    </div>
+  </div>
+
+</div>
 
   <!-- INDICADORES -->
-  <div class="global-kpis">
-    <article class="global-kpi">
-      <span>Total de registros</span>
-      <strong id="globalTotal">0</strong>
+  
+<div class="global-kpis">
+
+  <!-- TOTAL DE EQUIPOS -->
+  <article class="global-kpi">
+    <span>Total de equipos</span>
+
+    <div class="global-kpi-icono">
+      <svg viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="7" rx="2"/>
+        <rect x="3" y="13" width="18" height="7" rx="2"/>
+        <path d="M7 7.5h.01M7 16.5h.01"/>
+      </svg>
+    </div>
+
+    <strong id="globalTotal">0</strong>
+    <p class="global-kpi-descripcion">Equipos registrados en la base de datos</p>
+    <div class="global-kpi-indicador">
+      <span style="width:100%"></span>
+    </div>
+  </article>
+
+  <!-- EQUIPOS CIFRADOS -->
+  <article class="global-kpi">
+    <span>Equipos cifrados</span>
+
+    <div class="global-kpi-icono">
+      <svg viewBox="0 0 24 24">
+        <rect x="5" y="10" width="14" height="11" rx="2"/>
+        <path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+      </svg>
+    </div>
+
+    <strong id="globalProtegidos">0</strong>
+    <p class="global-kpi-descripcion">Equipos con cifrado activado</p>
+    <div class="global-kpi-indicador">
+      <span id="globalBarraCifrados" style="width:0%"></span>
+    </div>
+  </article>
+
+  <!-- COBERTURA DE CIFRADO -->
+  <article class="global-kpi">
+    <span>Porcentaje de equipos cifrados</span>
+
+    <div class="global-kpi-icono">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2 20 5v6c0 5-3 8-8 11-5-3-8-6-8-11V5z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+    </div>
+
+    <strong id="globalCobertura">0 %</strong>
+    <p class="global-kpi-descripcion">Del total de equipos registrados</p>
+    <div class="global-kpi-indicador">
+      <span id="globalBarraCobertura" style="width:0%"></span>
+    </div>
+  </article>
+
+  <!-- EQUIPOS SIN CIFRAR -->
+  <article class="global-kpi">
+    <span>Equipos sin cifrar</span>
+
+    <div class="global-kpi-icono">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 3 22 20H2z"/>
+        <path d="M12 9v5M12 17h.01"/>
+      </svg>
+    </div>
+
+    <strong id="globalSinCifrar">0</strong>
+    <p class="global-kpi-descripcion">Equipos que requieren atención</p>
+    <div class="global-kpi-indicador">
+      <span id="globalBarraSinCifrar" style="width:0%"></span>
+    </div>
+  </article>
+
+</div>
+
+<div class="global-visual-grid">
+    <!-- MAPA -->
+    <article class="tarjeta global-mapa-tarjeta">
+      <header class="tarjeta__cab">
+        <div>
+          <h2>Mapa mundial de cifrado</h2>
+          <p id="globalSeleccion">Vista global · Todos los países</p>
+        </div>
+      </header>
+
+      <div class="tarjeta__cuerpo">
+        <div id="mapaMundial"></div>
+        <p class="global-nota">
+          Selecciona un país para actualizar las métricas. Los países sin registros aparecerán sin datos.
+        </p>
+      </div>
     </article>
 
-    <article class="global-kpi">
-      <span>Registros protegidos</span>
-      <strong id="globalProtegidos">0</strong>
-    </article>
+    <!-- VISUALIZACIONES COMPLEMENTARIAS -->
+    <aside class="global-visuales" aria-label="Visualizaciones globales">
+      <article class="tarjeta global-panel-grafica">
+        <header class="tarjeta__cab">
+          <div>
+            <h2>Lugar en el que se encuentran los equipos</h2>
+            <p>Cantidad y porcentaje de equipos registrados en cada región</p>
+          </div>
+        </header>
+        <div class="tarjeta__cuerpo" id="globalRegionesGrafica"></div>
+      </article>
 
-    <article class="global-kpi">
-      <span>Cobertura de cifrado</span>
-      <strong id="globalCobertura">0 %</strong>
-    </article>
+      <article class="tarjeta global-panel-grafica">
+        <header class="tarjeta__cab">
+          <div>
+            <h2>Estado de cifrado</h2>
+            <p>Composición de los registros</p>
+          </div>
+        </header>
+        <div class="tarjeta__cuerpo" id="globalEstadosGrafica"></div>
+      </article>
 
-    <article class="global-kpi">
-      <span>Registros sin cifrar</span>
-      <strong id="globalSinCifrar">0</strong>
-    </article>
+    </aside>
   </div>
 
-  <!-- MAPA -->
-  <article class="tarjeta global-mapa-tarjeta">
+<div class="global-graficas-inferiores">
+
+  <!-- GRÁFICA DE CÍRCULOS: IZQUIERDA -->
+  <article class="tarjeta global-recencia-tarjeta">
     <header class="tarjeta__cab">
       <div>
-        <h2>Mapa mundial de cifrado</h2>
-        <p id="globalSeleccion">
-          Vista global · Todos los países
-        </p>
+        <h2>Equipos sin cifrar según su último acceso</h2>
+        <p>El tamaño del círculo representa la cantidad de equipos sin cifrar.</p>
       </div>
     </header>
 
     <div class="tarjeta__cuerpo">
-      <div id="mapaMundial"></div>
-      <p class="global-nota">
-        Selecciona un país para actualizar las métricas.
-        Los países sin registros aparecerán sin datos.
-      </p>
+      <div id="globalRecenciaGrafica"></div>
     </div>
   </article>
 
-  <!-- ACCESOS AL DETALLE -->
-  <div class="global-detalles">
-    <article class="tarjeta">
-      <div class="tarjeta__cuerpo">
-        <h3>Resumen de cifrado</h3>
-        <p>Consulta la distribución y cobertura de cifrado.</p>
-        <button class="btn" id="globalVerResumen">
-          Ver resumen
-        </button>
+  <!-- GRÁFICA DE SISTEMAS OPERATIVOS: DERECHA -->
+  <article class="tarjeta global-so-tarjeta">
+    <header class="tarjeta__cab">
+      <div>
+        <h2>Porcentaje de equipos cifrados por sistema operativo</h2>
+        <p>Compara qué porcentaje de equipos está cifrado en cada sistema operativo.</p>
       </div>
-    </article>
+    </header>
 
-    <article class="tarjeta">
-      <div class="tarjeta__cuerpo">
-        <h3>Inventario</h3>
-        <p>Explora los registros de los equipos.</p>
-        <button class="btn" id="globalVerInventario">
-          Ver inventario
-        </button>
-      </div>
-    </article>
+</div>
 
-    <article class="tarjeta">
-      <div class="tarjeta__cuerpo">
-        <h3>Excepciones</h3>
-        <p>Revisa alertas y registros que requieren atención.</p>
-        <button class="btn" id="globalVerExcepciones">
-          Ver excepciones
-        </button>
-      </div>
-    </article>
+
+  <div class="tarjeta__cuerpo">
+    <div id="globalSOGrafica"></div>
   </div>
+</article>
+
 
 </section>
 
@@ -841,7 +906,7 @@
 <script src="security/secure-db.js"></script>
 <script src="db.js"></script>
 <script src="pipeline.js"></script>
-<script src="dashboard-global.js"></script>
+<script src="dashboard-global.js?v=5"></script>
 <script src="app.js"></script>
 </body>
 </html>

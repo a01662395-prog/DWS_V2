@@ -658,9 +658,7 @@ const VISTAS = {
 };
 
 const MODULOS_POR_VISTA = {
-  resumen: ['kpis', 'serie', 'algoritmos'],
   inventario: ['inventario'],
-  tecnologias: ['tecnologias'],
   monitoreo: ['monitoreo'],
   excepciones: ['excepciones'],
   carga: ['carga', 'cola'],

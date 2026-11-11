@@ -64,6 +64,125 @@
   let mapaInicioY = 0;
   let mapaUltimoArrastre = 0;
   let filas = [];
+
+const filtrosMulti = {
+  region: new Set(),
+  pais: new Set(),
+  estado: new Set()
+};
+
+const opcionesFiltro = {
+  region: [],
+  pais: [],
+  estado: [
+    { valor: 'protegido', texto: 'Protegido' },
+    { valor: 'parcial', texto: 'Parcial' },
+    { valor: 'sin_cifrar', texto: 'Sin cifrar' }
+  ]
+};
+
+function valoresFiltro(tipo) {
+  return [...filtrosMulti[tipo]];
+}
+
+function actualizarMenuMulti(tipo) {
+  const contenedor = document.querySelector(
+    `.global-multi[data-filtro="${tipo}"]`
+  );
+  if (!contenedor) return;
+
+  const menu = contenedor.querySelector('.global-multi-menu');
+  const texto = contenedor.querySelector('.global-multi-texto');
+  const seleccionados = filtrosMulti[tipo];
+
+  const nombres = {
+    region: 'Todas las regiones',
+    pais: 'Todos los países',
+    estado: 'Todos los estados'
+  };
+
+  menu.replaceChildren();
+
+  opcionesFiltro[tipo].forEach(opcion => {
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    const span = document.createElement('span');
+
+    checkbox.type = 'checkbox';
+    checkbox.value = opcion.valor;
+    checkbox.checked = seleccionados.has(opcion.valor);
+    span.textContent = opcion.texto;
+
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        seleccionados.add(opcion.valor);
+      } else {
+        seleccionados.delete(opcion.valor);
+      }
+
+      if (tipo === 'region') llenarPaises();
+
+      actualizarTextoMulti(tipo);
+      pintar();
+    });
+
+    label.append(checkbox, span);
+    menu.append(label);
+  });
+
+  actualizarTextoMulti(tipo);
+}
+
+function actualizarTextoMulti(tipo) {
+  const contenedor = document.querySelector(
+    `.global-multi[data-filtro="${tipo}"]`
+  );
+  if (!contenedor) return;
+
+  const texto = contenedor.querySelector('.global-multi-texto');
+  const seleccionados = valoresFiltro(tipo);
+
+  const nombres = {
+    region: 'Todas las regiones',
+    pais: 'Todos los países',
+    estado: 'Todos los estados'
+  };
+
+  texto.textContent = seleccionados.length
+    ? seleccionados.join(', ')
+    : nombres[tipo];
+}
+
+function configurarMenusMulti() {
+  document.querySelectorAll('.global-multi').forEach(contenedor => {
+    const boton = contenedor.querySelector('.global-multi-boton');
+    const menu = contenedor.querySelector('.global-multi-menu');
+
+    boton.addEventListener('click', () => {
+      const abrir = menu.hidden;
+
+      document.querySelectorAll('.global-multi-menu')
+        .forEach(otro => { otro.hidden = true; });
+
+      document.querySelectorAll('.global-multi-boton')
+        .forEach(otro => otro.setAttribute('aria-expanded', 'false'));
+
+      menu.hidden = !abrir;
+      boton.setAttribute('aria-expanded', String(abrir));
+    });
+  });
+
+  document.addEventListener('click', evento => {
+    if (evento.target.closest('.global-multi')) return;
+
+    document.querySelectorAll('.global-multi-menu')
+      .forEach(menu => { menu.hidden = true; });
+
+    document.querySelectorAll('.global-multi-boton')
+      .forEach(boton => boton.setAttribute('aria-expanded', 'false'));
+  });
+}
+
   let iniciando = false;
   let iniciado = false;
 
@@ -80,29 +199,497 @@
     fila.continent ??
     '';
 
-  function pintar() {
-    const region = $('globalRegion')?.value || '';
-    const estado = $('globalEstado')?.value || '';
-    const pais = $('globalPais')?.value || '';
+  function pintarBarras(id, items, total) {
+    const contenedor = $(id);
+    if (!contenedor) return;
 
-    const filtradas = filas.filter(fila => {
-      if (
-        region &&
-        String(regionFila(fila)) !== region
-      ) return false;
+    contenedor.replaceChildren();
 
-      if (
-        pais &&
-        paisClave(nombrePais(fila)) !== paisClave(pais)
-      ) return false;
+    if (!items.length) {
+      const vacio = document.createElement('p');
+      vacio.className = 'global-grafica-vacia';
+      vacio.textContent = 'Sin datos para mostrar';
+      contenedor.append(vacio);
+      return;
+    }
 
-      if (
-        estado &&
-        clasificarEstadoFila(fila) !== estado
-      ) return false;
+    items.forEach(({ etiqueta, valor, color }) => {
+      const fila = document.createElement('div');
+      fila.className = 'global-barra-fila';
 
-      return true;
+      const cabecera = document.createElement('div');
+      cabecera.className = 'global-barra-cabecera';
+
+      const nombre = document.createElement('span');
+      nombre.textContent = etiqueta;
+
+      const cantidad = document.createElement('strong');
+
+const porcentaje = total ? (valor / total * 100).toFixed(1) : '0.0';
+
+cantidad.innerHTML = `
+  ${valor.toLocaleString('es-MX')}
+  <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">
+    (${porcentaje}%)
+  </span>
+`;
+
+      const pista = document.createElement('div');
+      pista.className = 'global-barra-pista';
+
+      const progreso = document.createElement('span');
+      progreso.className = 'global-barra-progreso';
+      progreso.style.width = `${total ? (valor / total) * 100 : 0}%`;
+      progreso.style.backgroundColor = color;
+
+      cabecera.append(nombre, cantidad);
+      pista.append(progreso);
+      fila.append(cabecera, pista);
+      contenedor.append(fila);
     });
+  }
+
+
+function obtenerColumnaSO(fila, nombres) {
+  const normalizarClave = texto => String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  const claves = Object.keys(fila);
+  const encontrada = claves.find(clave =>
+    nombres.some(nombre =>
+      normalizarClave(clave) === normalizarClave(nombre)
+    )
+  );
+
+  return encontrada ? String(fila[encontrada] ?? '').trim() : '';
+}
+
+function nombreSistemaOperativo(fila) {
+  const sistema = obtenerColumnaSO(fila, [
+    'Sistema Operativo',
+    'sistema_operativo',
+    'sistemaOperativo',
+    'so',
+    'os'
+  ]);
+
+  const version = obtenerColumnaSO(fila, [
+    'Versión SO',
+    'version_so',
+    'versionSO',
+    'version_sistema_operativo'
+  ]);
+
+  const so = normalizar(sistema);
+  const ver = normalizar(version);
+
+  if (so.includes('windows')) {
+    if (/windows\s*11|10\.0\.(22000|22621|22631|26100|26200)/.test(ver)) {
+      return 'Windows 11';
+    }
+
+    if (/windows\s*10|10\.0\.(1904[1-5]|1836[2-3]|17763|10240)/.test(ver)) {
+      return 'Windows 10';
+    }
+
+    return 'Windows sin versión identificada';
+  }
+
+  if (so.includes('mac') || so.includes('os x')) return 'macOS';
+  if (so.includes('linux')) return 'Linux';
+
+  return sistema || 'Sin sistema operativo';
+}
+
+function pintarGraficaSO(filtradas) {
+  const contenedor = $('globalSOGrafica');
+  if (!contenedor) return;
+
+  contenedor.replaceChildren();
+
+  const grupos = new Map();
+
+  filtradas.forEach(fila => {
+    const nombre = nombreSistemaOperativo(fila);
+
+    if (!grupos.has(nombre)) {
+      grupos.set(nombre, { total: 0, cifrados: 0 });
+    }
+
+    const grupo = grupos.get(nombre);
+    grupo.total++;
+
+    if (clasificarEstadoFila(fila) === 'protegido') {
+      grupo.cifrados++;
+    }
+  });
+
+  const resultados = [...grupos.entries()]
+    .map(([nombre, datos]) => ({
+      nombre,
+      total: datos.total,
+      porcentaje: datos.total
+        ? datos.cifrados / datos.total * 100
+        : 0
+    }))
+    .sort((a, b) => a.porcentaje - b.porcentaje);
+
+  if (!resultados.length) {
+    contenedor.textContent = 'No hay datos para mostrar.';
+    return;
+  }
+
+  resultados.forEach(item => {
+    const fila = document.createElement('div');
+    fila.className = 'global-so-fila';
+
+    const nombre = document.createElement('span');
+    nombre.className = 'global-so-nombre';
+    nombre.textContent = item.nombre;
+
+    const pista = document.createElement('div');
+    pista.className = 'global-so-pista';
+
+    const barra = document.createElement('div');
+    barra.className = 'global-so-barra';
+    barra.style.width = `${item.porcentaje}%`;
+
+    barra.style.backgroundColor =
+      item.porcentaje < 75 ? '#EA580C' :
+      item.porcentaje < 85 ? '#F2A582' :
+      item.porcentaje < 95 ? '#79A5C9' :
+      '#2563EB';
+
+    pista.append(barra);
+
+    const resultado = document.createElement('strong');
+    resultado.className = 'global-so-resultado';
+    resultado.textContent =
+      `${item.porcentaje.toFixed(1)}% · ${item.total.toLocaleString('es-MX')}`;
+
+    fila.append(nombre, pista, resultado);
+    contenedor.append(fila);
+  });
+}
+
+
+function obtenerColumnaSO(fila, nombres) {
+  const normalizarClave = texto => String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  const claves = Object.keys(fila);
+  const encontrada = claves.find(clave =>
+    nombres.some(nombre =>
+      normalizarClave(clave) === normalizarClave(nombre)
+    )
+  );
+
+  return encontrada ? String(fila[encontrada] ?? '').trim() : '';
+}
+
+function nombreSistemaOperativo(fila) {
+  const sistema = obtenerColumnaSO(fila, [
+    'Sistema Operativo',
+    'sistema_operativo',
+    'sistemaOperativo',
+    'so',
+    'os'
+  ]);
+
+  const version = obtenerColumnaSO(fila, [
+    'Versión SO',
+    'version_so',
+    'versionSO',
+    'version_sistema_operativo'
+  ]);
+
+  const so = normalizar(sistema);
+  const ver = normalizar(version);
+
+  if (so.includes('windows')) {
+    if (/windows\s*11|10\.0\.(22000|22621|22631|26100|26200)/.test(ver)) {
+      return 'Windows 11';
+    }
+
+    if (/windows\s*10|10\.0\.(1904[1-5]|1836[2-3]|17763|10240)/.test(ver)) {
+      return 'Windows 10';
+    }
+
+    return 'Windows sin versión identificada';
+  }
+
+  if (so.includes('mac') || so.includes('os x')) return 'macOS';
+  if (so.includes('linux')) return 'Linux';
+
+  return sistema || 'Sin sistema operativo';
+}
+
+function pintarGraficaSO(filtradas) {
+  const contenedor = $('globalSOGrafica');
+  if (!contenedor) return;
+
+  contenedor.replaceChildren();
+
+  const grupos = new Map();
+
+  filtradas.forEach(fila => {
+    const nombre = nombreSistemaOperativo(fila);
+
+    if (!grupos.has(nombre)) {
+      grupos.set(nombre, { total: 0, cifrados: 0 });
+    }
+
+    const grupo = grupos.get(nombre);
+    grupo.total++;
+
+    if (clasificarEstadoFila(fila) === 'protegido') {
+      grupo.cifrados++;
+    }
+  });
+
+  const resultados = [...grupos.entries()]
+    .map(([nombre, datos]) => ({
+      nombre,
+      total: datos.total,
+      porcentaje: datos.total
+        ? datos.cifrados / datos.total * 100
+        : 0
+    }))
+    .sort((a, b) => a.porcentaje - b.porcentaje);
+
+  if (!resultados.length) {
+    contenedor.textContent = 'No hay datos para mostrar.';
+    return;
+  }
+
+  resultados.forEach(item => {
+    const fila = document.createElement('div');
+    fila.className = 'global-so-fila';
+
+    const nombre = document.createElement('span');
+    nombre.className = 'global-so-nombre';
+    nombre.textContent = item.nombre;
+
+    const pista = document.createElement('div');
+    pista.className = 'global-so-pista';
+
+    const barra = document.createElement('div');
+    barra.className = 'global-so-barra';
+    barra.style.width = `${item.porcentaje}%`;
+
+    barra.style.backgroundColor =
+      item.porcentaje < 75 ? '#EA580C' :
+      item.porcentaje < 85 ? '#F2A582' :
+      item.porcentaje < 95 ? '#79A5C9' :
+      '#2563EB';
+
+    pista.append(barra);
+
+    const resultado = document.createElement('strong');
+    resultado.className = 'global-so-resultado';
+    resultado.textContent =
+      `${item.porcentaje.toFixed(1)}% · ${item.total.toLocaleString('es-MX')}`;
+
+    fila.append(nombre, pista, resultado);
+    contenedor.append(fila);
+  });
+}
+
+
+function pintarGraficaRecencia(filtradas) {
+  const contenedor = $('globalRecenciaGrafica');
+  if (!contenedor) return;
+
+  contenedor.replaceChildren();
+
+  const categorias = [
+    { nombre: '0-30 días', clave: '0-30', cantidad: 0 },
+    { nombre: '31-90 días', clave: '31-90', cantidad: 0 },
+    { nombre: '91-180 días', clave: '91-180', cantidad: 0 },
+    { nombre: '>180 días', clave: '>180', cantidad: 0 },
+    { nombre: 'No disponible', clave: 'no disponible', cantidad: 0 }
+  ];
+
+  const normalizarTexto = texto => String(texto ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  filtradas.forEach(fila => {
+    if (clasificarEstadoFila(fila) !== 'sin_cifrar') return;
+
+    const columna = Object.keys(fila).find(clave =>
+      normalizarTexto(clave).replace(/[^a-z0-9]/g, '') === 'bandarecencia'
+    );
+
+    const valor = normalizarTexto(columna ? fila[columna] : '')
+      .replace(/\s+/g, '');
+
+    let indice = 4;
+
+    if (valor.startsWith('0-30')) indice = 0;
+    else if (valor.startsWith('31-90')) indice = 1;
+    else if (valor.startsWith('91-180')) indice = 2;
+    else if (valor.includes('>180')) indice = 3;
+
+    categorias[indice].cantidad++;
+  });
+
+  const maximo = Math.max(1, ...categorias.map(c => c.cantidad));
+
+  categorias.forEach((categoria, indice) => {
+    const columna = document.createElement('div');
+    columna.className = 'global-recencia-item';
+
+    const espacio = document.createElement('div');
+    espacio.className = 'global-recencia-espacio';
+
+    const circulo = document.createElement('div');
+    circulo.className = 'global-recencia-circulo';
+
+    const tamano = categoria.cantidad
+      ? 20 + Math.sqrt(categoria.cantidad / maximo) * 60
+      : 0;
+
+    circulo.style.width = `${tamano}px`;
+    circulo.style.height = `${tamano}px`;
+    circulo.style.backgroundColor =
+      indice === 3 ? '#E94B0C' : '#F3B28E';
+
+    espacio.append(circulo);
+
+    const cantidad = document.createElement('strong');
+    cantidad.textContent = categoria.cantidad.toLocaleString('es-MX');
+
+    const nombre = document.createElement('span');
+    nombre.textContent = categoria.nombre;
+
+    columna.append(espacio, cantidad, nombre);
+    contenedor.append(columna);
+  });
+}
+
+  function actualizarGraficas(filtradas) {
+    const porRegion = new Map();
+    filtradas.forEach(fila => {
+      const region = String(regionFila(fila) || 'Sin región');
+      porRegion.set(region, (porRegion.get(region) || 0) + 1);
+    });
+
+    const regiones = [...porRegion.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([etiqueta, valor], indice) => ({
+        etiqueta,
+        valor,
+        color: ['#9B2C39', '#B83847', '#D65A66', '#E27180', '#F0A8B1', '#F8D0D5'][indice]
+      }));
+
+    const estados = [
+      { etiqueta: 'Cifrado', clave: 'protegido', color: '#9B2C39' },
+      { etiqueta: 'Parcial', clave: 'parcial', color: '#D65A66' },
+      { etiqueta: 'Sin cifrar', clave: 'sin_cifrar', color: '#F0A8B1' }
+    ].map(estado => ({
+      etiqueta: estado.etiqueta,
+      valor: filtradas.filter(fila => clasificarEstadoFila(fila) === estado.clave).length,
+      color: estado.color
+    })).filter(estado => estado.valor > 0);
+
+    pintarBarras('globalRegionesGrafica', regiones, filtradas.length);
+    pintarDonut('globalEstadosGrafica', estados, filtradas.length);
+
+  }
+
+  function pintarDonut(id, items, total) {
+    const contenedor = $(id);
+    if (!contenedor) return;
+
+    contenedor.replaceChildren();
+
+    const suma = items.reduce((acumulado, item) => acumulado + item.valor, 0);
+    const protegido = items.find(item => item.etiqueta === 'Cifrado')?.valor || 0;
+    const porcentajeProtegido = total ? (protegido / total) * 100 : 0;
+
+    const segmentos = [];
+    let inicio = 0;
+    items.forEach(item => {
+      const porcentaje = suma ? (item.valor / suma) * 100 : 0;
+      segmentos.push(`${item.color} ${inicio}% ${inicio + porcentaje}%`);
+      inicio += porcentaje;
+    });
+
+    const donut = document.createElement('div');
+    donut.className = 'global-donut';
+    donut.style.background = segmentos.length
+      ? `conic-gradient(${segmentos.join(', ')})`
+      : 'var(--fondo-alt)';
+
+    const centro = document.createElement('div');
+    centro.className = 'global-donut-centro';
+
+    const valor = document.createElement('strong');
+    valor.textContent = `${porcentajeProtegido.toFixed(1)}%`;
+
+    const etiqueta = document.createElement('span');
+    etiqueta.textContent = 'Protegido';
+
+    centro.append(valor, etiqueta);
+    donut.append(centro);
+
+    const leyenda = document.createElement('div');
+    leyenda.className = 'global-donut-leyenda';
+
+    items.forEach(item => {
+      const fila = document.createElement('div');
+      fila.className = 'global-donut-fila';
+
+      const nombre = document.createElement('span');
+      const punto = document.createElement('i');
+      punto.className = 'global-donut-punto';
+      punto.style.backgroundColor = item.color;
+      nombre.append(punto, `${item.etiqueta} (${item.valor.toLocaleString('es-MX')})`);
+
+      const porcentaje = document.createElement('strong');
+      porcentaje.textContent = `${total ? ((item.valor / total) * 100).toFixed(1) : '0.0'}%`;
+
+      fila.append(nombre, porcentaje);
+      leyenda.append(fila);
+    });
+
+    contenedor.append(donut, leyenda);
+  }
+
+  function pintar() {
+    
+  const regiones = valoresFiltro('region');
+  const paises = valoresFiltro('pais');
+  const estados = valoresFiltro('estado');
+
+  const filtradas = filas.filter(fila => {
+    const coincideRegion =
+      !regiones.length ||
+      regiones.includes(String(regionFila(fila)));
+
+    const coincidePais =
+      !paises.length ||
+      paises.some(pais =>
+        paisClave(nombrePais(fila)) === paisClave(pais)
+      );
+
+    const coincideEstado =
+      !estados.length ||
+      estados.includes(clasificarEstadoFila(fila));
+
+    return coincideRegion && coincidePais && coincideEstado;
+  });
 
     const protegidos = filtradas.filter(
       fila => clasificarEstadoFila(fila) === 'protegido'
@@ -126,44 +713,69 @@
     $('globalSinCifrar').textContent =
       sinCifrar.toLocaleString('es-MX');
 
+const totalEquipos = filtradas.length;
+
+const porcentajeCifrados = totalEquipos
+  ? (protegidos / totalEquipos) * 100
+  : 0;
+
+const porcentajeSinCifrar = totalEquipos
+  ? (sinCifrar / totalEquipos) * 100
+  : 0;
+
+$('globalBarraCifrados').style.width =
+  `${porcentajeCifrados}%`;
+
+$('globalBarraCobertura').style.width =
+  `${porcentajeCifrados}%`;
+
+$('globalBarraSinCifrar').style.width =
+  `${porcentajeSinCifrar}%`;
+
+
     $('globalSeleccion').textContent =
-      [region, pais, estado].filter(Boolean).join(' · ') ||
-      'Vista global · Todos los países';
+  [...regiones, ...paises, ...estados].join(' · ') ||
+  'Vista global · Todos los países';
 
-    actualizarSeleccionMapa(pais);
+    actualizarGraficas(filtradas);
+    pintarGraficaRecencia(filtradas);
+    pintarGraficaSO(filtradas);
+
+    actualizarSeleccionMapa(paises.length === 1 ? paises[0] : '');
   }
 
-  function llenarPaises() {
-    const selector = $('globalPais');
-    if (!selector) return;
 
-    const anterior = selector.value;
-    const region = $('globalRegion')?.value || '';
+function llenarPaises() {
+  const regiones = valoresFiltro('region');
 
-    const paises = [
-      ...new Set(
-        filas
-          .filter(fila =>
-            !region || String(regionFila(fila)) === region
-          )
-          .map(nombrePais)
-          .filter(Boolean)
-          .map(String)
-      )
-    ].sort((a, b) => a.localeCompare(b, 'es'));
+  const paises = [
+    ...new Set(
+      filas
+        .filter(fila =>
+          !regiones.length ||
+          regiones.includes(String(regionFila(fila)))
+        )
+        .map(nombrePais)
+        .filter(Boolean)
+        .map(String)
+    )
+  ].sort((a, b) => a.localeCompare(b, 'es'));
 
-    selector.replaceChildren(
-      new Option('Todos los países', '')
-    );
+  const clavesDisponibles = new Set(paises.map(paisClave));
 
-    paises.forEach(pais => {
-      selector.add(new Option(pais, pais));
-    });
-
-    if (paises.includes(anterior)) {
-      selector.value = anterior;
+  [...filtrosMulti.pais].forEach(pais => {
+    if (!clavesDisponibles.has(paisClave(pais))) {
+      filtrosMulti.pais.delete(pais);
     }
-  }
+  });
+
+  opcionesFiltro.pais = paises.map(pais => ({
+    valor: pais,
+    texto: pais
+  }));
+
+  actualizarMenuMulti('pais');
+}
 
   async function cargar() {
     if (iniciando) return;
@@ -173,30 +785,19 @@
     try {
       const actual = await DB.obtenerActual();
       filas = actual.filas || [];
-
-      const selectorRegion = $('globalRegion');
-      const regionAnterior = selectorRegion.value;
-
       const regiones = [
-        ...new Set(
-          filas
-            .map(regionFila)
-            .filter(Boolean)
-            .map(String)
-        )
-      ].sort((a, b) => a.localeCompare(b, 'es'));
+  ...new Set(
+    filas.map(regionFila).filter(Boolean).map(String)
+  )
+].sort((a, b) => a.localeCompare(b, 'es'));
 
-      selectorRegion.replaceChildren(
-        new Option('Todas las regiones', '')
-      );
+opcionesFiltro.region = regiones.map(region => ({
+  valor: region,
+  texto: region
+}));
 
-      regiones.forEach(region => {
-        selectorRegion.add(new Option(region, region));
-      });
-
-      if (regiones.includes(regionAnterior)) {
-        selectorRegion.value = regionAnterior;
-      }
+actualizarMenuMulti('region');
+actualizarMenuMulti('estado');
 
       llenarPaises();
       pintar();
@@ -282,7 +883,7 @@
 
     mapaGrupo.setAttribute(
       'transform',
-      `translate(${mapaPanX} ${mapaPanY}) translate(480 240) scale(${mapaZoom}) translate(-480 -240)`
+      `translate(${mapaPanX} ${mapaPanY}) translate(240 240) scale(${mapaZoom}) translate(-240 -240)`
     );
   }
 
@@ -373,9 +974,7 @@
   async function crearMapa2D() {
     const contenedor = $('mapaMundial');
 
-    const respuesta = await fetch(
-      'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson'
-    );
+    const respuesta = await fetch('./world.geojson');
 
     if (!respuesta.ok) {
       throw new Error('No se pudo cargar el mapa mundial');
@@ -386,7 +985,10 @@
 
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 960 480');
+    // Encuadre optimizado para las únicas regiones visibles: América del Norte,
+    // Centroamérica y América del Sur.
+    svg.setAttribute('viewBox', '0 0 480 480');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', 'Mapa mundial 2D');
     svg.classList.add('global-mapa-svg');
@@ -394,33 +996,52 @@
     svg.appendChild(mapaGrupo);
 
     mapaPaises = paises.map(feature => {
+      const relleno = colorPais(feature.properties.name);
+
+      // No dibujamos países fuera de Norteamérica, Centroamérica y Sudamérica.
+      if (relleno === '#D9DDE8') return null;
+
       const elemento = document.createElementNS(SVG_NS, 'path');
       elemento.setAttribute('d', crearRutaGeometria(feature.geometry));
-      elemento.setAttribute('fill', colorPais(feature.properties.name));
+      elemento.setAttribute('fill', relleno);
       elemento.setAttribute('stroke', 'rgba(255,255,255,0.7)');
       elemento.setAttribute('stroke-width', '0.55');
       elemento.setAttribute('vector-effect', 'non-scaling-stroke');
       elemento.classList.add('global-mapa-pais');
+      mapaGrupo.appendChild(elemento);
       elemento.addEventListener('click', () => {
         if (performance.now() - mapaUltimoArrastre < 150) return;
 
         const selector = $('globalPais');
-        const nombre = paisClave(feature.properties.name);
-        const opcion = [...selector.options].find(
-          item => paisClave(item.value) === nombre
-        );
+        
+const nombre = paisClave(feature.properties.name);
 
-        if (opcion) {
-          selector.value = opcion.value;
-          pintar();
-        } else {
-          $('globalSeleccion').textContent =
-            `${feature.properties.name} · Sin registros asociados`;
-        }
-      });
-      mapaGrupo.appendChild(elemento);
+const opcion = opcionesFiltro.pais.find(
+  item => paisClave(item.valor) === nombre
+);
+
+if (opcion) {
+  if (filtrosMulti.pais.has(opcion.valor)) {
+    filtrosMulti.pais.delete(opcion.valor);
+  } else {
+    filtrosMulti.pais.add(opcion.valor);
+  }
+
+  actualizarMenuMulti('pais');
+  pintar();
+} else {
+  $('globalSeleccion').textContent =
+    `${feature.properties.name} · Sin registros asociados`;
+}
+
+}); // Cierra el evento click del país
+
       return { elemento, feature };
-    });
+    }).filter(Boolean); // Conserva únicamente los países coloreados
+
+    if (mapaPaises.length === 0) {
+      throw new Error('El archivo del mapa no contiene países para mostrar');
+    }
 
     contenedor.replaceChildren(crearControlesZoom(), svg);
     mapaSvg = svg;
@@ -429,7 +1050,9 @@
     mapaPanY = 0;
     aplicarZoomMapa();
     ajustarMapa2D();
-    actualizarSeleccionMapa($('globalPais')?.value || '');
+    actualizarSeleccionMapa(
+  filtrosMulti.pais.size === 1 ? valoresFiltro('pais')[0] : ''
+);
     activarArrastreMapa(svg);
 
     svg.addEventListener('wheel', evento => {
@@ -445,37 +1068,43 @@
     iniciado = true;
   }
 
-  function iniciar() {
-    if (!$('globalRegion')) return;
 
-    $('globalRegion').addEventListener('change', () => {
+function iniciar() {
+  if (!document.querySelector('.global-multi')) return;
+
+  configurarMenusMulti();
+
+  actualizarMenuMulti('region');
+  actualizarMenuMulti('pais');
+  actualizarMenuMulti('estado');
+
+  const botonLimpiar = $('globalLimpiar');
+
+  if (botonLimpiar) {
+    botonLimpiar.addEventListener('click', () => {
+      filtrosMulti.region.clear();
+      filtrosMulti.pais.clear();
+      filtrosMulti.estado.clear();
+
       llenarPaises();
+
+      actualizarMenuMulti('region');
+      actualizarMenuMulti('estado');
+
+      document.querySelectorAll('.global-multi-menu')
+        .forEach(menu => {
+          menu.hidden = true;
+        });
+
+      document.querySelectorAll('.global-multi-boton')
+        .forEach(boton => {
+          boton.setAttribute('aria-expanded', 'false');
+        });
+
       pintar();
-    });
-
-    $('globalPais').addEventListener('change', pintar);
-
-    $('globalEstado').addEventListener('change', pintar);
-
-    $('globalLimpiar').addEventListener('click', () => {
-      $('globalRegion').value = '';
-      $('globalEstado').value = '';
-
-      llenarPaises();
-
-      $('globalPais').value = '';
-
-      pintar();
-    });
-
-    [
-      ['globalVerResumen', 'resumen'],
-      ['globalVerInventario', 'inventario'],
-      ['globalVerExcepciones', 'excepciones']
-    ].forEach(([id, vista]) => {
-      $(id)?.addEventListener('click', () => irA(vista));
     });
   }
+}
 
   document.addEventListener('DOMContentLoaded', iniciar);
 
