@@ -375,6 +375,152 @@ function pintarGraficaSO(filtradas) {
   });
 }
 
+function valorGestion(fila, nombres) {
+  const normalizarClave = texto => normalizar(texto).replace(/[^a-z0-9]/g, '');
+  const clave = Object.keys(fila).find(actual =>
+    nombres.some(nombre => normalizarClave(actual) === normalizarClave(nombre))
+  );
+  return clave ? fila[clave] : '';
+}
+
+function esDatoVerdadero(valor) {
+  const texto = normalizar(valor);
+  return ['si', 'sí', 'yes', 'true', '1', 'enrolled', 'managed', 'activo', 'activa'].includes(texto);
+}
+
+function pintarCoberturaGestion(filtradas) {
+  const contenedor = $('globalGestionGrafica');
+  if (!contenedor) return;
+
+  contenedor.replaceChildren();
+  const total = filtradas.length;
+
+  const mdm = filtradas.filter(fila => esDatoVerdadero(valorGestion(fila, [
+    'En MDM', 'en_mdm', 'en_mdm_bool', 'mdm'
+  ]))).length;
+  const activeDirectory = filtradas.filter(fila => esDatoVerdadero(valorGestion(fila, [
+    'En AD', 'en_ad', 'en_ad_bool', 'active_directory', 'active directory'
+  ]))).length;
+  const porcentaje = valor => total ? (valor / total) * 100 : 0;
+  const indicadores = [
+    { valor: porcentaje(mdm), etiqueta: 'En MDM' },
+    { valor: porcentaje(activeDirectory), etiqueta: 'En Active Directory' }
+  ];
+
+  const resumen = document.createElement('div');
+  resumen.className = 'global-gestion-resumen';
+
+  indicadores.forEach(indicador => {
+    const item = document.createElement('div');
+    item.className = 'global-gestion-indicador';
+
+    const anillo = document.createElement('div');
+    anillo.className = 'global-gestion-anillo';
+    anillo.style.setProperty('--gestion-porcentaje', `${indicador.valor}%`);
+    anillo.setAttribute('aria-label', `${indicador.valor.toFixed(1)}% ${indicador.etiqueta}`);
+
+    const contenido = document.createElement('div');
+    contenido.className = 'global-gestion-anillo-centro';
+    contenido.textContent = `${indicador.valor.toFixed(1)}%`;
+    anillo.append(contenido);
+
+    const etiqueta = document.createElement('span');
+    etiqueta.textContent = indicador.etiqueta;
+    item.append(anillo, etiqueta);
+    resumen.append(item);
+  });
+
+  contenedor.append(resumen);
+}
+
+function valorFilaCritica(fila, nombres) {
+  const normalizarClave = texto => normalizar(texto).replace(/[^a-z0-9]/g, '');
+  const claves = Object.keys(fila);
+  const clave = claves.find(actual =>
+    nombres.some(nombre => normalizarClave(actual) === normalizarClave(nombre))
+  );
+  return clave ? String(fila[clave] ?? '').trim() : '';
+}
+
+function nombreEquipoCritico(fila) {
+  return valorFilaCritica(fila, [
+    'nombre_equipo', 'equipo', 'hostname', 'host', 'device_name',
+    'asset_name', 'activo', 'serial', 'numero_serie', 'id'
+  ]) || 'Equipo sin identificar';
+}
+
+function puntuarEquipoCritico(fila) {
+  const estado = clasificarEstadoFila(fila);
+  const usuario = valorFilaCritica(fila, [
+    'usuario', 'usuario_asignado', 'responsable', 'assigned_user', 'owner'
+  ]);
+  const ultimaConexion = valorFilaCritica(fila, [
+    'ultimo_acceso', 'ultima_conexion', 'last_seen', 'last_login', 'fecha_ultimo_acceso'
+  ]);
+
+  let puntaje = estado === 'sin_cifrar' ? 100 : estado === 'parcial' ? 55 : 0;
+  if (!usuario) puntaje += 10;
+
+  const fecha = Date.parse(ultimaConexion);
+  if (ultimaConexion && !Number.isNaN(fecha)) {
+    const dias = (Date.now() - fecha) / 86400000;
+    if (dias > 90) puntaje += 20;
+  }
+
+  return puntaje;
+}
+
+function pintarEquiposCriticos(filtradas) {
+  const contenedor = $('globalCriticosGrafica');
+  const contador = $('globalCriticosConteo');
+  if (!contenedor) return;
+
+  contenedor.replaceChildren();
+
+  const equipos = filtradas
+    .map(fila => ({ fila, puntaje: puntuarEquipoCritico(fila) }))
+    .filter(item => item.puntaje > 0)
+    .sort((a, b) => b.puntaje - a.puntaje)
+    .slice(0, 5);
+
+  if (contador) contador.textContent = `${equipos.length} alertas`;
+
+  if (!equipos.length) {
+    const vacio = document.createElement('p');
+    vacio.className = 'global-grafica-vacia';
+    vacio.textContent = 'No hay equipos críticos con los filtros actuales.';
+    contenedor.append(vacio);
+    return;
+  }
+
+  equipos.forEach(({ fila }) => {
+    const estado = clasificarEstadoFila(fila);
+    const item = document.createElement('div');
+    item.className = 'global-critico-item';
+
+    const nombre = document.createElement('strong');
+    nombre.textContent = nombreEquipoCritico(fila);
+
+    const detalle = document.createElement('span');
+    detalle.className = 'global-critico-problema';
+    detalle.textContent = estado === 'sin_cifrar'
+      ? 'Sin cifrado'
+      : estado === 'parcial'
+        ? 'Datos incompletos'
+        : 'Requiere revisión';
+
+    const pais = nombrePais(fila);
+    if (pais) detalle.textContent += ` · ${pais}`;
+
+    const nivel = document.createElement('span');
+    nivel.className = `global-critico-estado global-critico-estado--${estado}`;
+    nivel.textContent = estado === 'sin_cifrar' ? 'Crítica' : 'Media';
+
+    item.append(nombre, detalle, nivel);
+    contenedor.append(item);
+  });
+}
+
 
 function obtenerColumnaSO(fila, nombres) {
   const normalizarClave = texto => String(texto)
@@ -730,6 +876,11 @@ const porcentajeSinCifrar = totalEquipos
   ? (sinCifrar / totalEquipos) * 100
   : 0;
 
+const colorCoberturaKpi = colorCobertura(porcentajeCifrados);
+const tarjetaCobertura = $('globalCobertura').closest('.global-kpi');
+tarjetaCobertura?.style.setProperty('--kpi-color', colorCoberturaKpi);
+$('globalCobertura').style.color = colorCoberturaKpi;
+
 $('globalBarraCifrados').style.width =
   `${porcentajeCifrados}%`;
 
@@ -747,8 +898,10 @@ $('globalBarraSinCifrar').style.width =
     actualizarGraficas(filtradas);
     pintarGraficaCumplimiento(filtradas);
     pintarGraficaSO(filtradas);
+    pintarEquiposCriticos(filtradas);
+    pintarCoberturaGestion(filtradas);
+    actualizarVisualMapa();
 
-    actualizarSeleccionMapa(paises.length === 1 ? paises[0] : '');
   }
 
 
@@ -858,23 +1011,95 @@ actualizarMenuMulti('estado');
     return '';
   }
 
-  function colorPais(nombre) {
-    const pais = paisClave(nombre);
-    const norteamerica = ['canada', 'estados unidos', 'mexico'];
-    const centroamerica = [
-      'belize', 'guatemala', 'honduras', 'el salvador',
-      'nicaragua', 'costa rica', 'panama'
-    ];
-    const sudamerica = [
-      'colombia', 'venezuela', 'guyana', 'suriname', 'ecuador',
-      'peru', 'brasil', 'bolivia', 'paraguay', 'chile',
-      'argentina', 'uruguay'
-    ];
+  const paisesObjetivo = new Set([
+    'canada', 'estados unidos', 'mexico',
+    'belice', 'belize', 'guatemala', 'honduras', 'el salvador',
+    'nicaragua', 'costa rica', 'panama',
+    'colombia', 'venezuela', 'guyana', 'surinam', 'suriname',
+    'ecuador', 'peru', 'brasil', 'brazil', 'bolivia', 'paraguay',
+    'chile', 'argentina', 'uruguay'
+  ]);
 
-    if (norteamerica.includes(pais)) return '#5C88DA';
-    if (centroamerica.includes(pais)) return '#FF7F32';
-    if (sudamerica.includes(pais)) return '#FF585D';
-    return '#D9DDE8';
+  function esPaisObjetivo(nombre) {
+    return paisesObjetivo.has(paisClave(nombre));
+  }
+
+  function colorCobertura(porcentaje) {
+    if (porcentaje < 75) return '#E85D04';
+    if (porcentaje < 85) return '#F2A582';
+    if (porcentaje < 95) return '#79A5C9';
+    return '#2563EB';
+  }
+
+  function crearEstadisticasPaises(filasMapa) {
+    const estadisticas = new Map();
+
+    filasMapa.forEach(fila => {
+      const nombre = nombrePais(fila);
+      if (!nombre || !esPaisObjetivo(nombre)) return;
+
+      const clave = paisClave(nombre);
+      const actual = estadisticas.get(clave) || { total: 0, cifrados: 0 };
+      actual.total++;
+      if (clasificarEstadoFila(fila) === 'protegido') actual.cifrados++;
+      estadisticas.set(clave, actual);
+    });
+
+    return estadisticas;
+  }
+
+  function actualizarLeyendaMapa() {
+    const leyenda = $('globalMapaLeyenda');
+    if (!leyenda) return;
+
+    leyenda.replaceChildren();
+    [
+      ['Menos de 75%', '#E85D04'],
+      ['75% a 84%', '#F2A582'],
+      ['85% a 94%', '#79A5C9'],
+      ['95% o más', '#2563EB'],
+      ['Sin información', '#D9DDE8']
+    ].forEach(([texto, color]) => {
+      const item = document.createElement('span');
+      const muestra = document.createElement('i');
+      muestra.className = 'global-mapa-leyenda-muestra';
+      muestra.style.backgroundColor = color;
+      item.append(muestra, texto);
+      leyenda.append(item);
+    });
+  }
+
+  function actualizarVisualMapa(filasMapa = filas) {
+    if (!mapaPaises.length) return;
+
+    const estadisticas = crearEstadisticasPaises(filasMapa);
+
+    mapaPaises.forEach(({ elemento, feature }) => {
+      const clave = paisClave(feature.properties.name);
+      const estadistica = estadisticas.get(clave);
+
+      if (!estadistica || !estadistica.total) {
+        elemento.style.display = '';
+        elemento.setAttribute('fill', '#D9DDE8');
+        elemento.setAttribute(
+          'aria-label',
+          `${feature.properties.name}: sin información`
+        );
+        elemento.title = `${feature.properties.name}: sin información`;
+        return;
+      }
+
+      const porcentaje = (estadistica.cifrados / estadistica.total) * 100;
+      elemento.style.display = '';
+      elemento.setAttribute('fill', colorCobertura(porcentaje));
+      elemento.setAttribute(
+        'aria-label',
+        `${feature.properties.name}: ${porcentaje.toFixed(1)}% de equipos cifrados`
+      );
+      elemento.title = `${feature.properties.name}: ${porcentaje.toFixed(1)}% cifrado`;
+    });
+
+    actualizarLeyendaMapa();
   }
 
   function ajustarMapa2D() {
@@ -1002,46 +1227,37 @@ actualizarMenuMulti('estado');
     mapaGrupo = document.createElementNS(SVG_NS, 'g');
     svg.appendChild(mapaGrupo);
 
-    mapaPaises = paises.map(feature => {
-      const relleno = colorPais(feature.properties.name);
+    const tooltip = document.createElement('div');
+    tooltip.className = 'global-mapa-tooltip';
+    tooltip.hidden = true;
 
+    const moverTooltip = evento => {
+      const rect = contenedor.getBoundingClientRect();
+      tooltip.style.left = `${evento.clientX - rect.left + 12}px`;
+      tooltip.style.top = `${evento.clientY - rect.top + 12}px`;
+    };
+
+    mapaPaises = paises.map(feature => {
       // No dibujamos países fuera de Norteamérica, Centroamérica y Sudamérica.
-      if (relleno === '#D9DDE8') return null;
+      if (!esPaisObjetivo(feature.properties.name)) return null;
 
       const elemento = document.createElementNS(SVG_NS, 'path');
       elemento.setAttribute('d', crearRutaGeometria(feature.geometry));
-      elemento.setAttribute('fill', relleno);
+      elemento.setAttribute('fill', '#D9DDE8');
       elemento.setAttribute('stroke', 'rgba(255,255,255,0.7)');
       elemento.setAttribute('stroke-width', '0.55');
       elemento.setAttribute('vector-effect', 'non-scaling-stroke');
       elemento.classList.add('global-mapa-pais');
       mapaGrupo.appendChild(elemento);
-      elemento.addEventListener('click', () => {
-        if (performance.now() - mapaUltimoArrastre < 150) return;
-
-        const selector = $('globalPais');
-        
-const nombre = paisClave(feature.properties.name);
-
-const opcion = opcionesFiltro.pais.find(
-  item => paisClave(item.valor) === nombre
-);
-
-if (opcion) {
-  if (filtrosMulti.pais.has(opcion.valor)) {
-    filtrosMulti.pais.delete(opcion.valor);
-  } else {
-    filtrosMulti.pais.add(opcion.valor);
-  }
-
-  actualizarMenuMulti('pais');
-  pintar();
-} else {
-  $('globalSeleccion').textContent =
-    `${feature.properties.name} · Sin registros asociados`;
-}
-
-}); // Cierra el evento click del país
+      elemento.addEventListener('pointerenter', evento => {
+        tooltip.textContent = feature.properties.name;
+        tooltip.hidden = false;
+        moverTooltip(evento);
+      });
+      elemento.addEventListener('pointermove', moverTooltip);
+      elemento.addEventListener('pointerleave', () => {
+        tooltip.hidden = true;
+      });
 
       return { elemento, feature };
     }).filter(Boolean); // Conserva únicamente los países coloreados
@@ -1050,16 +1266,15 @@ if (opcion) {
       throw new Error('El archivo del mapa no contiene países para mostrar');
     }
 
-    contenedor.replaceChildren(crearControlesZoom(), svg);
+    contenedor.replaceChildren(crearControlesZoom(), svg, tooltip);
     mapaSvg = svg;
     mapaZoom = 1;
     mapaPanX = 0;
     mapaPanY = 0;
     aplicarZoomMapa();
     ajustarMapa2D();
-    actualizarSeleccionMapa(
-  filtrosMulti.pais.size === 1 ? valoresFiltro('pais')[0] : ''
-);
+    actualizarVisualMapa();
+    actualizarLeyendaMapa();
     activarArrastreMapa(svg);
 
     svg.addEventListener('wheel', evento => {

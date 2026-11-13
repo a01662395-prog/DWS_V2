@@ -112,12 +112,6 @@
       </a>
     </nav>
 
-    <div class="sidebar__pie">
-      <div class="salud" id="saludSidebar" data-estado="comprobando">
-        <span class="salud__punto"></span><span class="salud__txt">Comprobando API…</span>
-      </div>
-      <p class="pie__nota">AES-GCM-256 · ZERO-KNOWLEDGE</p>
-    </div>
   </aside>
 
   <!-- Capa oscura que cierra el menú en móvil -->
@@ -419,7 +413,7 @@
   </article>
 
   <!-- COBERTURA DE CIFRADO -->
-  <article class="global-kpi">
+  <article class="global-kpi global-kpi--cobertura">
     <span>Porcentaje de equipos cifrados</span>
 
     <div class="global-kpi-icono">
@@ -457,22 +451,49 @@
 </div>
 
 <div class="global-visual-grid">
+  <div class="global-mapa-columna">
     <!-- MAPA -->
     <article class="tarjeta global-mapa-tarjeta">
       <header class="tarjeta__cab">
         <div>
-          <h2>Mapa mundial de cifrado</h2>
+          <h2>Cobertura de cifrado por país</h2>
           <p id="globalSeleccion">Vista global · Todos los países</p>
         </div>
       </header>
 
       <div class="tarjeta__cuerpo">
         <div id="mapaMundial"></div>
+        <div class="global-mapa-leyenda" id="globalMapaLeyenda" aria-label="Escala de cobertura de cifrado"></div>
         <p class="global-nota">
-          Selecciona un país para actualizar las métricas. Los países sin registros aparecerán sin datos.
+          El color muestra el porcentaje de equipos cifrados en cada país. Pasa el puntero sobre un país para ver su nombre.
         </p>
       </div>
     </article>
+
+    <article class="tarjeta global-so-tarjeta">
+      <header class="tarjeta__cab">
+        <div>
+          <h2>Porcentaje de equipos cifrados por sistema operativo</h2>
+          <p>Compara qué porcentaje de equipos está cifrado en cada sistema operativo.</p>
+        </div>
+      </header>
+      <div class="tarjeta__cuerpo">
+        <div id="globalSOGrafica"></div>
+      </div>
+    </article>
+
+    <article class="tarjeta global-recencia-tarjeta">
+      <header class="tarjeta__cab">
+        <div>
+          <h2>Cumplimiento</h2>
+          <p>Estado de cifrado reportado por los equipos</p>
+        </div>
+      </header>
+      <div class="tarjeta__cuerpo">
+        <div id="globalCumplimientoGrafica"></div>
+      </div>
+    </article>
+  </div>
 
     <!-- VISUALIZACIONES COMPLEMENTARIAS -->
     <aside class="global-visuales" aria-label="Visualizaciones globales">
@@ -496,39 +517,40 @@
         <div class="tarjeta__cuerpo" id="globalEstadosGrafica"></div>
       </article>
 
+      <article class="tarjeta global-gestion-tarjeta">
+        <header class="tarjeta__cab">
+          <div>
+            <h2>Cobertura de gestión</h2>
+            <p>Equipos administrados y conectados a la organización</p>
+          </div>
+        </header>
+        <div class="tarjeta__cuerpo" id="globalGestionGrafica"></div>
+      </article>
+
+      <article class="tarjeta global-criticos-tarjeta">
+        <header class="tarjeta__cab">
+          <div>
+            <h2>Excepciones y alertas</h2>
+            <p>Equipos con problemas que necesitan revisión.</p>
+          </div>
+          <span class="global-criticos-contador" id="globalCriticosConteo">0 alertas</span>
+        </header>
+        <div class="tarjeta__cuerpo">
+          <div class="global-criticos-tabla" aria-label="Cinco equipos más críticos">
+            <div class="global-criticos-encabezado" aria-hidden="true">
+              <span>Equipo</span>
+              <span>Problema</span>
+              <span>Estado</span>
+            </div>
+            <div id="globalCriticosGrafica"></div>
+          </div>
+          <p class="global-criticos-nota">Para ver más información, consulta la pestaña Equipos críticos.</p>
+        </div>
+      </article>
+
     </aside>
+
   </div>
-
-<div class="global-graficas-inferiores">
-
-  <!-- GRÁFICA DE CÍRCULOS: IZQUIERDA -->
-  <article class="tarjeta global-recencia-tarjeta">
-    <header class="tarjeta__cab">
-      <div>
-        <h2>Cumplimiento</h2>
-        <p>Estado de cifrado reportado por los equipos</p>
-      </div>
-    </header>
-
-    <div class="tarjeta__cuerpo">
-      <div id="globalCumplimientoGrafica"></div>
-    </div>
-  </article>
-
-  <!-- GRÁFICA DE SISTEMAS OPERATIVOS: DERECHA -->
-  <article class="tarjeta global-so-tarjeta">
-    <header class="tarjeta__cab">
-      <div>
-        <h2>Porcentaje de equipos cifrados por sistema operativo</h2>
-        <p>Compara qué porcentaje de equipos está cifrado en cada sistema operativo.</p>
-      </div>
-    </header>
-
-  <div class="tarjeta__cuerpo">
-    <div id="globalSOGrafica"></div>
-  </div>
-</article>
-</div>
 
 </section>
 
