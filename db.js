@@ -12,7 +12,7 @@
 
 const DB = (() => {
   const DB_NAME = 'cifracontrol_zk_vault_db';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORE_META = '__vault_meta__';
   const STORE_DATOS = 'dataset_actual';
   const STORE_HISTORIAL = 'historial_cargas';
@@ -114,7 +114,12 @@ const DB = (() => {
     });
 
     if (registroCola && registroCola.id) {
-      await SecureDB.setEncrypted(db, STORE_HISTORIAL, registroCola.id, registroCola);
+      await SecureDB.setEncrypted(db, STORE_HISTORIAL, registroCola.id, {
+        ...registroCola,
+        filas: filas || [],
+        meta: meta || null,
+        esSnapshot: true,
+      });
     }
 
     return true;
@@ -143,6 +148,46 @@ const DB = (() => {
     const db = await abrir();
     const items = await SecureDB.getAllDecrypted(db, STORE_HISTORIAL);
     return items.sort((a, b) => new Date(b.recibidoEn || 0) - new Date(a.recibidoEn || 0));
+  }
+
+  async function obtenerHistorial(id) {
+    if (!Vault.estaDesbloqueada() || !id) return null;
+    const db = await abrir();
+    return SecureDB.getDecrypted(db, STORE_HISTORIAL, id);
+  }
+
+  async function guardarHistorial(registro) {
+    if (!Vault.esAdmin() || !registro?.id) {
+      throw new Error('No se pudo guardar el snapshot histórico.');
+    }
+    const db = await abrir();
+    await SecureDB.setEncrypted(db, STORE_HISTORIAL, registro.id, {
+      ...registro,
+      esSnapshot: true,
+    });
+    return true;
+  }
+
+  async function asegurarActualEnHistorial(actual) {
+    if (!Vault.estaDesbloqueada() || !actual?.filas?.length) return false;
+    const historial = await listarHistorial();
+    const procesadoEn = actual.meta?.procesado_en || actual.meta?.procesadoEn || '';
+    const yaExiste = historial.some(item => item.esSnapshot && (
+      (procesadoEn && (item.meta?.procesado_en || item.meta?.procesadoEn) === procesadoEn)
+      || item.id === `hist-actual-${procesadoEn}`
+    ));
+    if (yaExiste) return false;
+    const id = `hist-actual-${procesadoEn || Date.now()}`;
+    await guardarHistorial({
+      id,
+      archivo: actual.meta?.archivo_origen || 'Carga actual',
+      recibidoEn: actual.meta?.procesado_en || new Date().toISOString(),
+      fechaCorte: actual.meta?.fecha_corte || actual.meta?.fechaCorte || null,
+      filas: actual.filas,
+      meta: actual.meta || null,
+      status: 'procesado',
+    });
+    return true;
   }
 
   /**
@@ -236,6 +281,9 @@ const DB = (() => {
     guardarCarga,
     obtenerActual,
     listarHistorial,
+    obtenerHistorial,
+    guardarHistorial,
+    asegurarActualEnHistorial,
     vaciar,
     restablecerFabrica,
     exportarBackup,

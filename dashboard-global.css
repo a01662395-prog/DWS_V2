@@ -17,6 +17,12 @@
   padding: 12px; margin-bottom: 12px; background: var(--superficie);
   border: 1px solid var(--borde); border-radius: var(--r-lg); box-shadow: var(--sombra-sm);
 }
+
+/* Los filtros globales fueron retirados de la interfaz; mantener este
+   resguardo evita que una versión antigua del marcado vuelva a mostrarlos. */
+.global-filtros {
+  display: none !important;
+}
 .global-filtros label {
   display: grid; gap: 6px; color: var(--texto-med); font-size: 12px; font-weight: 500;
 }
@@ -88,7 +94,7 @@
 #mapaMundial {
   width: 75%; max-width: 650px; height: 300px; min-height: 300px; margin-inline: auto;
   overflow: hidden; position: relative;
-  border: 1px solid var(--borde); border-radius: var(--r); background: #f4f6fb;
+  border: 1px solid var(--borde); border-radius: var(--r); background: var(--fondo-alt);
 }
 #mapaMundial canvas { display: block; }
 .global-mapa-svg { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
@@ -183,10 +189,10 @@
 }
 
 /* Color superior de cada tarjeta */
-.global-kpi:nth-child(1) { --kpi-color: #9B2C39; }
-.global-kpi:nth-child(2) { --kpi-color: #059669; }
-.global-kpi:nth-child(3) { --kpi-color: #2563EB; }
-.global-kpi:nth-child(4) { --kpi-color: #DC2626; }
+.global-kpi:nth-child(1) { --kpi-color: var(--exito); }
+.global-kpi:nth-child(2) { --kpi-color: var(--info); }
+.global-kpi:nth-child(3) { --kpi-color: var(--exito); }
+.global-kpi:nth-child(4) { --kpi-color: var(--peligro); }
 
 .global-kpi::before {
   height: 4px;
@@ -386,7 +392,7 @@
   height: 74px;
   place-items: center;
   border-radius: 50%;
-  background: conic-gradient(#5c8fbd var(--gestion-porcentaje), #edf0f4 0);
+  background: conic-gradient(var(--info) var(--gestion-porcentaje), var(--fondo-alt) 0);
   position: relative;
 }
 
@@ -579,8 +585,8 @@
   flex: none;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--peligro-fondo);
+  color: var(--peligro);
   font-size: 13px;
   font-weight: 600;
 }
@@ -645,18 +651,18 @@
 }
 
 .global-critico-estado--sin_cifrar {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--peligro-fondo);
+  color: var(--peligro);
 }
 
 .global-critico-estado--parcial {
-  background: #ffedd5;
-  color: #9a3412;
+  background: var(--alerta-fondo);
+  color: var(--alerta);
 }
 
 .global-critico-estado--protegido {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--fondo-alt);
+  color: var(--texto-med);
 }
 
 .global-criticos-nota {
@@ -787,7 +793,7 @@
 }
 
 .global-multi-menu input {
-  accent-color: #9b2c39;
+  accent-color: var(--femsa-600);
 }
 
 
@@ -902,6 +908,12 @@
   grid-column: 2;
   grid-row: 1;
   align-self: start;
+  gap: 8px;
+}
+
+.global-visual-grid > .global-visuales > .tarjeta {
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .global-mapa-columna {
@@ -915,6 +927,32 @@
 .global-mapa-columna .global-recencia-tarjeta {
   width: 100%;
   margin: 0;
+}
+
+/* Distribuye mejor la altura disponible de la columna izquierda. El mapa
+   conserva mayor presencia visual que las gráficas inferiores. */
+@media (min-width: 601px) {
+  .global-mapa-columna {
+    gap: 10px;
+  }
+
+  .global-mapa-tarjeta #mapaMundial {
+    height: 540px;
+    min-height: 540px;
+  }
+
+  .global-mapa-columna .global-so-tarjeta .tarjeta__cuerpo {
+    min-height: 160px;
+  }
+
+  .global-mapa-columna .global-recencia-tarjeta .tarjeta__cuerpo {
+    min-height: 120px;
+  }
+
+  .global-mapa-columna .global-so-tarjeta,
+  .global-mapa-columna .global-recencia-tarjeta {
+    margin-bottom: 0;
+  }
 }
 
 .global-visual-grid > .global-visuales .global-criticos-tarjeta {

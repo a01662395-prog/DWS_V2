@@ -6,14 +6,18 @@
 
   const $ = id => document.getElementById(id);
 
-  const colores = [
-    '#FF585D',
-    '#FF7F32',
-    '#5C88DA',
-    '#8E3A80',
-    '#6CC24A',
-    '#D9D9D6'
-  ];
+  const PALETA = Object.freeze({
+    exito: '#198765',
+    peligro: '#DC3545',
+    alerta: '#E5A12D',
+    desconocido: '#9CA3AF',
+    info: '#487DA8',
+    femsa: '#982B3B',
+    neutro: '#E2E5EA'
+  });
+  window.CIFRACONTROL_PALETA = PALETA;
+
+  const colores = [PALETA.femsa, PALETA.info, PALETA.exito, PALETA.alerta, PALETA.desconocido];
 
   const normalizar = valor =>
     String(valor ?? '')
@@ -64,6 +68,7 @@
   let mapaInicioY = 0;
   let mapaUltimoArrastre = 0;
   let filas = [];
+  let filasActuales = [];
 
 const filtrosMulti = {
   region: new Set(),
@@ -358,10 +363,9 @@ function pintarGraficaSO(filtradas) {
     barra.style.width = `${item.porcentaje}%`;
 
     barra.style.backgroundColor =
-      item.porcentaje < 75 ? '#EA580C' :
-      item.porcentaje < 85 ? '#F2A582' :
-      item.porcentaje < 95 ? '#79A5C9' :
-      '#2563EB';
+      item.porcentaje < 75 ? PALETA.peligro :
+      item.porcentaje < 85 ? PALETA.alerta :
+      PALETA.exito;
 
     pista.append(barra);
 
@@ -630,10 +634,9 @@ function pintarGraficaSO(filtradas) {
     barra.style.width = `${item.porcentaje}%`;
 
     barra.style.backgroundColor =
-      item.porcentaje < 75 ? '#EA580C' :
-      item.porcentaje < 85 ? '#F2A582' :
-      item.porcentaje < 95 ? '#79A5C9' :
-      '#2563EB';
+      item.porcentaje < 75 ? PALETA.peligro :
+      item.porcentaje < 85 ? PALETA.alerta :
+      PALETA.exito;
 
     pista.append(barra);
 
@@ -661,17 +664,17 @@ function pintarGraficaCumplimiento(filtradas) {
     {
       nombre: 'Cumple',
       clave: 'protegido',
-      color: '#32658B'
+      color: PALETA.exito
     },
     {
       nombre: 'No cumple',
       clave: 'sin_cifrar',
-      color: '#E86B20'
+      color: PALETA.peligro
     },
     {
       nombre: 'No evaluado',
       clave: 'parcial',
-      color: '#9CA3AF'
+      color: PALETA.desconocido
     }
   ];
 
@@ -731,32 +734,43 @@ function pintarGraficaCumplimiento(filtradas) {
 }
 
   function actualizarGraficas(filtradas) {
-    const porRegion = new Map();
+    const paisesSeleccionados = valoresFiltro('pais');
+    const mostrarPaises = paisesSeleccionados.length > 0;
+    const porUbicacion = new Map();
     filtradas.forEach(fila => {
-      const region = String(regionFila(fila) || 'Sin región');
-      porRegion.set(region, (porRegion.get(region) || 0) + 1);
+      const ubicacion = mostrarPaises
+        ? String(nombrePais(fila) || 'Sin país')
+        : String(regionFila(fila) || 'Sin región');
+      porUbicacion.set(ubicacion, (porUbicacion.get(ubicacion) || 0) + 1);
     });
 
-    const regiones = [...porRegion.entries()]
+    const ubicaciones = [...porUbicacion.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
-      .map(([etiqueta, valor], indice) => ({
+      .map(([etiqueta, valor]) => ({
         etiqueta,
         valor,
-        color: ['#9B2C39', '#B83847', '#D65A66', '#E27180', '#F0A8B1', '#F8D0D5'][indice]
+        color: PALETA.info
       }));
 
+    const subtitulo = $('globalUbicacionSubtitulo');
+    if (subtitulo) {
+      subtitulo.textContent = mostrarPaises
+        ? 'Cantidad y porcentaje de equipos registrados en cada país seleccionado'
+        : 'Cantidad y porcentaje de equipos registrados en cada región';
+    }
+
     const estados = [
-      { etiqueta: 'Cifrado', clave: 'protegido', color: '#9B2C39' },
-      { etiqueta: 'Parcial', clave: 'parcial', color: '#D65A66' },
-      { etiqueta: 'Sin cifrar', clave: 'sin_cifrar', color: '#F0A8B1' }
+      { etiqueta: 'Cifrado', clave: 'protegido', color: PALETA.exito },
+      { etiqueta: 'Parcial', clave: 'parcial', color: PALETA.alerta },
+      { etiqueta: 'Sin cifrar', clave: 'sin_cifrar', color: PALETA.peligro }
     ].map(estado => ({
       etiqueta: estado.etiqueta,
       valor: filtradas.filter(fila => clasificarEstadoFila(fila) === estado.clave).length,
       color: estado.color
     })).filter(estado => estado.valor > 0);
 
-    pintarBarras('globalRegionesGrafica', regiones, filtradas.length);
+    pintarBarras('globalRegionesGrafica', ubicaciones, filtradas.length);
     pintarDonut('globalEstadosGrafica', estados, filtradas.length);
 
   }
@@ -944,12 +958,13 @@ function llenarPaises() {
 
     try {
       const actual = await DB.obtenerActual();
-      filas = actual.filas || [];
+      filasActuales = actual.filas || [];
+      filas = filasActuales;
       const regiones = [
-  ...new Set(
-    filas.map(regionFila).filter(Boolean).map(String)
-  )
-].sort((a, b) => a.localeCompare(b, 'es'));
+        ...new Set(
+          filas.map(regionFila).filter(Boolean).map(String)
+        )
+      ].sort((a, b) => a.localeCompare(b, 'es'));
 
 opcionesFiltro.region = regiones.map(region => ({
   valor: region,
@@ -1025,10 +1040,9 @@ actualizarMenuMulti('estado');
   }
 
   function colorCobertura(porcentaje) {
-    if (porcentaje < 75) return '#E85D04';
-    if (porcentaje < 85) return '#F2A582';
-    if (porcentaje < 95) return '#79A5C9';
-    return '#2563EB';
+    if (porcentaje < 75) return PALETA.peligro;
+    if (porcentaje < 85) return PALETA.alerta;
+    return PALETA.exito;
   }
 
   function crearEstadisticasPaises(filasMapa) {
@@ -1054,11 +1068,10 @@ actualizarMenuMulti('estado');
 
     leyenda.replaceChildren();
     [
-      ['Menos de 75%', '#E85D04'],
-      ['75% a 84%', '#F2A582'],
-      ['85% a 94%', '#79A5C9'],
-      ['95% o más', '#2563EB'],
-      ['Sin información', '#D9DDE8']
+      ['Menos de 75%', PALETA.peligro],
+      ['75% a 84%', PALETA.alerta],
+      ['85% o más', PALETA.exito],
+      ['Sin información', PALETA.desconocido]
     ].forEach(([texto, color]) => {
       const item = document.createElement('span');
       const muestra = document.createElement('i');
@@ -1080,7 +1093,7 @@ actualizarMenuMulti('estado');
 
       if (!estadistica || !estadistica.total) {
         elemento.style.display = '';
-        elemento.setAttribute('fill', '#D9DDE8');
+        elemento.setAttribute('fill', PALETA.desconocido);
         elemento.setAttribute(
           'aria-label',
           `${feature.properties.name}: sin información`
@@ -1243,7 +1256,7 @@ actualizarMenuMulti('estado');
 
       const elemento = document.createElementNS(SVG_NS, 'path');
       elemento.setAttribute('d', crearRutaGeometria(feature.geometry));
-      elemento.setAttribute('fill', '#D9DDE8');
+        elemento.setAttribute('fill', PALETA.desconocido);
       elemento.setAttribute('stroke', 'rgba(255,255,255,0.7)');
       elemento.setAttribute('stroke-width', '0.55');
       elemento.setAttribute('vector-effect', 'non-scaling-stroke');
@@ -1291,14 +1304,13 @@ actualizarMenuMulti('estado');
   }
 
 
-function iniciar() {
-  if (!document.querySelector('.global-multi')) return;
-
-  configurarMenusMulti();
-
-  actualizarMenuMulti('region');
-  actualizarMenuMulti('pais');
-  actualizarMenuMulti('estado');
+  function iniciar() {
+    if (document.querySelector('.global-multi')) {
+    configurarMenusMulti();
+    actualizarMenuMulti('region');
+    actualizarMenuMulti('pais');
+    actualizarMenuMulti('estado');
+  }
 
   const botonLimpiar = $('globalLimpiar');
 

@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239B2C39'/><text x='16' y='22' font-family='sans-serif' font-weight='800' font-size='18' fill='%23ffffff' text-anchor='middle'>F</text></svg>">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="estilos.css">
-<link rel="stylesheet" href="dashboard-global.css">
+<link rel="stylesheet" href="dashboard-global.css?v=8">
 </head>
 <body>
 
@@ -87,12 +87,8 @@
         <svg class="ico"><use href="#i-inventario"></use></svg><span class="nav__txt">Inventario</span>
         <b class="nav__badge" data-badge="inventario" hidden>0</b>
       </a>
-      <a class="nav__link" data-ir="monitoreo" href="#/monitoreo">
-        <svg class="ico"><use href="#i-actividad"></use></svg><span class="nav__txt">Monitoreo</span>
-        <b class="nav__badge" data-badge="monitoreo" hidden>0</b>
-      </a>
       <a class="nav__link" data-ir="excepciones" href="#/excepciones">
-        <svg class="ico"><use href="#i-alerta"></use></svg><span class="nav__txt">Excepciones</span>
+        <svg class="ico"><use href="#i-alerta"></use></svg><span class="nav__txt">Alertas de cifrado</span>
         <b class="nav__badge nav__badge--peligro" data-badge="excepciones" hidden>0</b>
       </a>
       <a class="nav__link" data-ir="reportes" href="#/reportes">
@@ -101,6 +97,9 @@
   </svg>
   <span class="nav__txt">Reportes</span>
 </a>
+      <a class="nav__link" data-ir="historial" href="#/historial">
+        <svg class="ico"><use href="#i-actividad"></use></svg><span class="nav__txt">Historial de datos</span>
+      </a>
 
       <p class="nav__titulo">Herramientas y datos</p>
       <a class="nav__link" data-ir="carga" href="#/carga">
@@ -245,15 +244,30 @@
                   <svg class="ico"><use href="#i-buscar"></use></svg>
                   <input type="search" id="fBusqueda" placeholder="Buscar activo, ubicación o responsable" aria-label="Buscar en el inventario">
                 </label>
-                <select id="fEstado" class="campo" aria-label="Filtrar por estado de cifrado">
-                  <option value="">Todos los estados</option>
-                  <option value="protegido">Protegido</option>
-                  <option value="parcial">Cifrado parcial</option>
-                  <option value="sin_cifrar">Sin cifrar</option>
-                </select>
-                <select id="fTipo" class="campo" aria-label="Filtrar por tipo de activo">
-                  <option value="">Todos los tipos</option>
-                </select>
+                <div class="inventario-multi" data-inventario-filtro="estado">
+                  <button type="button" class="inventario-multi__boton campo" aria-label="Filtrar por estado de cifrado" aria-expanded="false">
+                    <span class="inventario-multi__texto">Todos los estados</span><span aria-hidden="true">⌄</span>
+                  </button>
+                  <div class="inventario-multi__menu" hidden>
+                    <div class="inventario-multi__acciones">
+                      <button type="button" data-inventario-seleccionar>Seleccionar todos</button>
+                      <button type="button" data-inventario-limpiar>Limpiar selección</button>
+                    </div>
+                    <div class="inventario-multi__opciones"></div>
+                  </div>
+                </div>
+                <div class="inventario-multi" data-inventario-filtro="tipo">
+                  <button type="button" class="inventario-multi__boton campo" aria-label="Filtrar por tipo de activo" aria-expanded="false">
+                    <span class="inventario-multi__texto">Todos los tipos</span><span aria-hidden="true">⌄</span>
+                  </button>
+                  <div class="inventario-multi__menu" hidden>
+                    <div class="inventario-multi__acciones">
+                      <button type="button" data-inventario-seleccionar>Seleccionar todos</button>
+                      <button type="button" data-inventario-limpiar>Limpiar selección</button>
+                    </div>
+                    <div class="inventario-multi__opciones"></div>
+                  </div>
+                </div>
                 <button class="btn" id="btnRefrescarInventario" title="Actualizar la tabla">
                   <svg class="ico"><use href="#i-refrescar"></use></svg>
                 </button>
@@ -271,33 +285,6 @@
                 <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar conexión</button>
               </div>
               <div data-datos="inventario"></div>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           VISTA 4 · MONITOREO
-           ================================================================ -->
-      <section class="vista" data-vista="monitoreo" hidden>
-        <div class="modulo" data-modulo="monitoreo">
-          <article class="tarjeta">
-            <header class="tarjeta__cab">
-              <div><h2>Salud de servicios</h2><p>Disponibilidad y latencia de la última comprobación</p></div>
-              <button class="btn" id="btnRefrescarMonitoreo"><svg class="ico"><use href="#i-refrescar"></use></svg>Actualizar</button>
-            </header>
-            <div class="tarjeta__cuerpo">
-              <div class="skel-esq" data-skel>
-                <div class="serv-esq"><div class="skel skel--caja"></div><div class="skel skel--caja"></div><div class="skel skel--caja"></div></div>
-                <div class="serv-esq"><div class="skel skel--caja"></div><div class="skel skel--caja"></div><div class="skel skel--caja"></div></div>
-              </div>
-              <div class="fallo" data-fallo hidden>
-                <svg class="ico ico--grande"><use href="#i-wifi-off"></use></svg>
-                <h3>No se pudo cargar el monitoreo</h3>
-                <p data-fallo-msg></p>
-                <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar conexión</button>
-              </div>
-              <div data-datos="monitoreo"></div>
             </div>
           </article>
         </div>
@@ -322,54 +309,6 @@
   </div>
 
   <!-- FILTROS -->
-
-<!-- FILTROS MULTISELECCIÓN -->
-<div class="global-filtros">
-
-  <div class="global-filtro-multi">
-    <label id="globalRegionLabel">Región</label>
-    <div class="global-multi" data-filtro="region">
-      <button type="button" class="global-multi-boton"
-              aria-labelledby="globalRegionLabel"
-              aria-expanded="false">
-        <span class="global-multi-texto">Todas las regiones</span>
-        <span>⌄</span>
-      </button>
-      <div class="global-multi-menu" id="globalRegionOpciones" hidden></div>
-    </div>
-  </div>
-
-  <div class="global-filtro-multi">
-    <label id="globalPaisLabel">País</label>
-    <div class="global-multi" data-filtro="pais">
-      <button type="button" class="global-multi-boton"
-              aria-labelledby="globalPaisLabel"
-              aria-expanded="false">
-        <span class="global-multi-texto">Todos los países</span>
-        <span>⌄</span>
-      </button>
-      <div class="global-multi-menu" id="globalPaisOpciones" hidden></div>
-    </div>
-  </div>
-
-  <div class="global-filtro-multi">
-    <label id="globalEstadoLabel">Estado de cifrado</label>
-    <div class="global-multi" data-filtro="estado">
-      <button type="button" class="global-multi-boton"
-              aria-labelledby="globalEstadoLabel"
-              aria-expanded="false">
-        <span class="global-multi-texto">Todos los estados</span>
-        <span>⌄</span>
-      </button>
-      <div class="global-multi-menu" id="globalEstadoOpciones" hidden>
-        <label><input type="checkbox" value="protegido"> Protegido</label>
-        <label><input type="checkbox" value="parcial"> Parcial</label>
-        <label><input type="checkbox" value="sin_cifrar"> Sin cifrar</label>
-      </div>
-    </div>
-  </div>
-
-</div>
 
   <!-- INDICADORES -->
   
@@ -474,7 +413,7 @@
       <header class="tarjeta__cab">
         <div>
           <h2>Porcentaje de equipos cifrados por sistema operativo</h2>
-          <p>Compara qué porcentaje de equipos está cifrado en cada sistema operativo.</p>
+          <p>Compara qué porcentaje de equipos está cifrado en cada sistema operativo</p>
         </div>
       </header>
       <div class="tarjeta__cuerpo">
@@ -500,21 +439,21 @@
       <article class="tarjeta global-panel-grafica">
         <header class="tarjeta__cab">
           <div>
-            <h2>Lugar en el que se encuentran los equipos</h2>
-            <p>Cantidad y porcentaje de equipos registrados en cada región</p>
-          </div>
-        </header>
-        <div class="tarjeta__cuerpo" id="globalRegionesGrafica"></div>
-      </article>
-
-      <article class="tarjeta global-panel-grafica">
-        <header class="tarjeta__cab">
-          <div>
             <h2>Estado de cifrado</h2>
             <p>Composición de los registros</p>
           </div>
         </header>
         <div class="tarjeta__cuerpo" id="globalEstadosGrafica"></div>
+      </article>
+
+      <article class="tarjeta global-panel-grafica">
+        <header class="tarjeta__cab">
+          <div>
+            <h2>Lugar en el que se encuentran los equipos</h2>
+            <p id="globalUbicacionSubtitulo">Cantidad y porcentaje de equipos registrados en cada región</p>
+          </div>
+        </header>
+        <div class="tarjeta__cuerpo" id="globalRegionesGrafica"></div>
       </article>
 
       <article class="tarjeta global-gestion-tarjeta">
@@ -558,7 +497,7 @@
         <div class="modulo" data-modulo="excepciones">
           <article class="tarjeta">
             <header class="tarjeta__cab">
-              <div><h2>Excepciones de cifrado</h2><p>Incidencias abiertas ordenadas por severidad</p></div>
+              <div><h2>Nivel de severidad</h2><p>Distribución de las alertas detectadas según su gravedad</p></div>
               <div class="segmentos" role="group" aria-label="Filtrar por severidad">
                 <button class="segmento is-activo" data-sev="">Todas</button>
                 <button class="segmento" data-sev="critica">Críticas</button>
@@ -568,6 +507,13 @@
               </div>
             </header>
             <div class="tarjeta__cuerpo">
+              <div class="excepciones-busqueda">
+                <label class="campo campo--buscar" for="fSerieExcepciones">
+                  <svg class="ico" aria-hidden="true"><use href="#i-buscar"></use></svg>
+                  <input type="search" id="fSerieExcepciones" placeholder="Buscar por número de serie..." autocomplete="off">
+                </label>
+                <button type="button" class="btn btn--mini" id="btnLimpiarSerieExcepciones" hidden>Limpiar búsqueda</button>
+              </div>
               <div class="skel-esq" data-skel>
                 <div class="skel skel--linea"></div><div class="skel skel--linea"></div><div class="skel skel--linea"></div><div class="skel skel--linea"></div>
               </div>
@@ -649,39 +595,6 @@
               </div>
             </article>
 
-            <!-- Panel de Transferencia de Paquetes -->
-            <article class="tarjeta" id="panelCargaPaqueteCifrado" style="margin-top:14px">
-              <header class="tarjeta__cab">
-                <div>
-                  <h2>Paquetes de Datos</h2>
-                  <p id="subtituloPaqueteCifrado">Importa o exporta el archivo de datos protegido para tu panel</p>
-                </div>
-                <span class="pastilla pastilla--info">PAQUETES</span>
-              </header>
-              <div class="tarjeta__cuerpo" style="display:grid;gap:12px">
-                <div class="boveda-aviso-zk" id="avisoSoloOperador" hidden>
-                  <svg class="ico"><use href="#i-escudo"></use></svg>
-                  <div>
-                    <strong>Modo Operador</strong>
-                    <p>Tu cuenta tiene privilegios de consulta. Para actualizar tu panel, importa un archivo de paquete generado por el Administrador.</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label class="boveda-label" for="inputPassTransporteCarga">Contraseña del archivo</label>
-                  <input type="password" id="inputPassTransporteCarga" class="campo boveda-input" placeholder="Contraseña de protección para el archivo .json…">
-                </div>
-
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button type="button" class="btn btn--primario" id="btnImportarPaqueteCarga">
-                    <svg class="ico"><use href="#i-subir"></use></svg>Cargar paquete (.json)
-                  </button>
-                  <button type="button" class="btn" id="btnExportarPaqueteCarga">
-                    <svg class="ico"><use href="#i-descargar"></use></svg>Descargar paquete (.json)
-                  </button>
-                </div>
-              </div>
-            </article>
           </div>
 
           <div class="modulo" data-modulo="cola">
@@ -723,21 +636,9 @@
                 <input type="checkbox" id="setTema" class="interruptor">
               </label>
               <label class="fila-set">
-                <span><strong>Simular fallo de red</strong><small>Fuerza un error en las peticiones para probar los reintentos</small></span>
-                <input type="checkbox" id="setFallo" class="interruptor">
-              </label>
-              <label class="fila-set">
                 <span><strong>Sidebar plegado</strong><small>Reduce la barra lateral a iconos</small></span>
                 <input type="checkbox" id="setSidebar" class="interruptor">
               </label>
-              <div class="fila-set">
-                <span><strong>Retardo simulado</strong><small>Latencia para visualizar los Skeleton Loaders</small></span>
-                <select id="setRetardo" class="campo">
-                  <option value="0" selected>Sin retardo (instantáneo)</option>
-                  <option value="300">300 ms</option>
-                  <option value="900">900 ms</option>
-                </select>
-              </div>
               <div class="fila-set" style="flex-direction:column;align-items:stretch;gap:10px">
                 <div>
                   <strong>Compartir / Respaldar Base de Datos</strong>
@@ -764,60 +665,177 @@
             </div>
           </article>
         </div>
+        <article class="tarjeta modulo modulo--monitoreo" data-modulo="monitoreo">
+          <header class="tarjeta__cab">
+            <div><h2>Monitoreo del sistema</h2><p>Disponibilidad y latencia de la última comprobación</p></div>
+            <button class="btn" id="btnRefrescarMonitoreo"><svg class="ico"><use href="#i-refrescar"></use></svg>Actualizar</button>
+          </header>
+          <div class="tarjeta__cuerpo">
+            <div class="skel-esq" data-skel>
+              <div class="serv-esq"><div class="skel skel--caja"></div><div class="skel skel--caja"></div><div class="skel skel--caja"></div></div>
+              <div class="serv-esq"><div class="skel skel--caja"></div><div class="skel skel--caja"></div><div class="skel skel--caja"></div></div>
+            </div>
+            <div class="fallo" data-fallo hidden>
+              <svg class="ico ico--grande"><use href="#i-wifi-off"></use></svg>
+              <h3>No se pudo cargar el monitoreo</h3>
+              <p data-fallo-msg></p>
+              <button class="btn btn--primario" data-reintentar><svg class="ico"><use href="#i-reintentar"></use></svg>Reintentar conexión</button>
+            </div>
+            <div data-datos="monitoreo"></div>
+          </div>
+        </article>
       </section>
 
 <section class="vista" data-vista="reportes" hidden>
   <article class="tarjeta">
     <header class="tarjeta__cab">
       <div>
-        <h2>Generador de reportes</h2>
-        <p>Filtra tus datos y genera un reporte en PDF.</p>
+        <h2>Reportes automáticos</h2>
+        <p>Genera análisis ejecutivos y técnicos a partir de los datos cargados.</p>
       </div>
     </header>
 
     <div class="tarjeta__cuerpo">
+      <div class="reporte-fuente">
+        <label>Datos del reporte
+          <select class="campo" id="reporteFuente">
+            <option value="actual">Carga actual</option>
+            <option value="historico">Una carga histórica</option>
+            <option value="comparativo">Comparar periodos</option>
+          </select>
+        </label>
+        <label id="reporteFuenteHistorica" hidden>Carga histórica
+          <select class="campo" id="reporteCargaHistorica"></select>
+        </label>
+        <div id="reporteFuentesComparacion" class="reporte-fuente-comparacion" hidden>
+          <label>Periodo inicial<select class="campo" id="reportePeriodoInicial"></select></label>
+          <label>Periodo final<select class="campo" id="reportePeriodoFinal"></select></label>
+        </div>
+      </div>
       <div class="reporte-filtros">
-        <label>Columna para filtrar
-          <select class="campo" id="reporteCampo">
-            <option value="">Todas las columnas</option>
-          </select>
-        </label>
+        <div class="reporte-filtro-columna">
+          <div class="reporte-filtro-columna__cabecera">
+            <span>Columna para filtrar</span>
+            <div class="reporte-filtro-categorias" role="tablist" aria-label="Categoría de columnas">
+              <button type="button" class="reporte-filtro-categoria is-activa" role="tab" aria-selected="true" data-reporte-categoria="principales">Principales</button>
+              <button type="button" class="reporte-filtro-categoria" role="tab" aria-selected="false" data-reporte-categoria="avanzadas">Avanzadas</button>
+            </div>
+          </div>
+          <div class="reporte-multi" data-reporte-filtro="campo">
+            <button type="button" class="reporte-multi-boton" aria-label="Columnas para filtrar" aria-expanded="false">
+              <span class="reporte-multi-texto">Todas las columnas</span><span aria-hidden="true">⌄</span>
+            </button>
+            <div class="reporte-multi-menu" hidden>
+              <div class="reporte-multi-acciones"><button type="button" data-reporte-seleccionar>Seleccionar todos</button><button type="button" data-reporte-limpiar>Limpiar selección</button></div>
+              <div class="reporte-multi-opciones"></div>
+            </div>
+          </div>
+        </div>
 
-        <label>Valor
-          <select class="campo" id="reporteValor">
-            <option value="">Todos los valores</option>
-          </select>
-        </label>
+        <div class="reporte-filtro-valores">
+          <label for="reporteValoresPorColumna">Valor</label>
+          <div id="reporteValoresPorColumna" class="reporte-valores-columna">
+            <p class="reporte-filtro-ayuda">Selecciona una columna para elegir valores.</p>
+          </div>
+        </div>
 
         <label>Buscar texto
           <input class="campo" id="reporteBuscar"
                  type="search" placeholder="Buscar registros">
         </label>
 
-        <label>Estado de cifrado
-          <select class="campo" id="reporteEstado">
-            <option value="">Todos</option>
-            <option value="protegido">Protegido</option>
-            <option value="parcial">Parcial</option>
-            <option value="sin_cifrar">Sin cifrar</option>
-          </select>
-        </label>
+        <div class="reporte-graficas-opciones" role="group" aria-labelledby="reporteGraficasTitulo">
+          <div class="reporte-graficas-titulo" id="reporteGraficasTitulo">Gráficas del reporte</div>
+          <label><input type="checkbox" data-reporte-grafica="estado" checked> Estado general de cifrado</label>
+          <label><input type="checkbox" data-reporte-grafica="paises" checked> Países que requieren atención</label>
+          <label><input type="checkbox" data-reporte-grafica="sistemas" checked> Cifrado por sistema operativo</label>
+          <label><input type="checkbox" data-reporte-grafica="regiones"> Distribución regional del riesgo</label>
+        </div>
+
+        <div class="reporte-contenido-opciones" role="group" aria-labelledby="reporteContenidoTitulo">
+          <div class="reporte-contenido-cabecera">
+            <div class="reporte-graficas-titulo" id="reporteContenidoTitulo">Personalizar contenido del reporte</div>
+            <div class="reporte-contenido-acciones">
+              <button type="button" data-reporte-contenido-seleccionar>Seleccionar todo</button>
+              <button type="button" data-reporte-contenido-limpiar>Deseleccionar todo</button>
+            </div>
+          </div>
+          <div class="reporte-contenido-lista">
+            <label><input type="checkbox" data-reporte-contenido="resumen" checked> Resumen general y KPIs</label>
+            <label><input type="checkbox" data-reporte-contenido="geografia" checked> Cifrado por país y región</label>
+            <label><input type="checkbox" data-reporte-contenido="estado" checked> Estado general de cifrado</label>
+            <label><input type="checkbox" data-reporte-contenido="sistemas" checked> Cifrado por sistema operativo</label>
+            <label><input type="checkbox" data-reporte-contenido="mdm" checked> Cobertura de MDM</label>
+            <label><input type="checkbox" data-reporte-contenido="ad" checked> Cobertura de Active Directory</label>
+            <label><input type="checkbox" data-reporte-contenido="cumplimiento" checked> Cumplimiento</label>
+            <label><input type="checkbox" data-reporte-contenido="alertas" checked> Alertas de cifrado</label>
+            <label><input type="checkbox" data-reporte-contenido="evolucion" checked> Evolución histórica del cifrado</label>
+            <label><input type="checkbox" data-reporte-contenido="comparacion" checked> Comparación entre periodos</label>
+            <label><input type="checkbox" data-reporte-contenido="recomendaciones" checked> Recomendaciones y conclusiones</label>
+            <label data-reporte-contenido-solo="tecnico"><input type="checkbox" data-reporte-contenido="detalle"> Tabla detallada de equipos</label>
+          </div>
+        </div>
       </div>
 
       <div class="reporte-acciones">
         <button class="btn" id="reporteLimpiar">
           Limpiar filtros
         </button>
-        <button class="btn btn--primario" id="reporteDescargar">
-          Descargar PDF
+        <button class="btn btn--primario" id="reporteEjecutivoPDF">
+          Descargar reporte ejecutivo
+        </button>
+        <button class="btn btn--primario" id="reporteTecnicoPDF">
+          Descargar reporte técnico
+        </button>
+        <button class="btn" id="reporteComparativoPDF">
+          Descargar comparativo
         </button>
       </div>
 
       <p class="reporte-contador" id="reporteContador"></p>
+
+      <div class="reporte-pestanas" role="tablist" aria-label="Tipo de reporte">
+        <button class="reporte-pestana is-activa" type="button" role="tab" aria-selected="true" data-reporte="ejecutivo">Reporte ejecutivo</button>
+        <button class="reporte-pestana" type="button" role="tab" aria-selected="false" data-reporte="tecnico">Reporte técnico</button>
+      </div>
+
       <div id="reporteVistaPrevia"></div>
     </div>
   </article>
 </section>
+
+      <!-- ================================================================
+           VISTA 8 · HISTORIAL DE DATOS
+           ================================================================ -->
+      <section class="vista" data-vista="historial" hidden>
+        <div class="modulo" data-modulo="historial">
+          <article class="tarjeta">
+            <header class="tarjeta__cab">
+              <div><h2>Historial de datos</h2><p>Consulta cargas anteriores sin modificar la información actual.</p></div>
+              <div class="filtros">
+                <label class="campo campo--buscar"><svg class="ico"><use href="#i-buscar"></use></svg><input type="search" id="historialBuscar" placeholder="Buscar archivo" aria-label="Buscar cargas históricas"></label>
+                <input class="campo historial-fecha" id="historialDesde" type="date" aria-label="Fecha inicial">
+                <input class="campo historial-fecha" id="historialHasta" type="date" aria-label="Fecha final">
+              </div>
+            </header>
+            <div class="tarjeta__cuerpo"><div id="historialTabla"></div></div>
+          </article>
+
+          <article class="tarjeta historial-tendencia" id="historialTendencia">
+            <header class="tarjeta__cab">
+              <div><h2>Evolución del cifrado</h2><p>Porcentaje de equipos cifrados a lo largo del tiempo</p></div>
+            </header>
+            <div class="tarjeta__cuerpo">
+              <div id="historialEvolucionCifrado"></div>
+            </div>
+          </article>
+
+          <article class="tarjeta historial-panel" id="historialDetalle" hidden>
+            <header class="tarjeta__cab"><div><h2 id="historialDetalleTitulo">Detalle de la carga</h2><p id="historialDetalleSubtitulo"></p></div><button class="btn" id="historialVolver">Volver al historial</button></header>
+            <div class="tarjeta__cuerpo" id="historialDetalleContenido"></div>
+          </article>
+        </div>
+      </section>
 
     </main>
   </div>
@@ -926,14 +944,7 @@
 <script src="security/secure-db.js"></script>
 <script src="db.js"></script>
 <script src="pipeline.js"></script>
-<script src="dashboard-global.js?v=5"></script>
+<script src="dashboard-global.js?v=8"></script>
 <script src="app.js"></script>
 </body>
 </html>
-
-<a class="nav__link" data-ir="reportes" href="#/reportes">
-  <svg class="ico">
-    <use href="#i-descargar"></use>
-  </svg>
-  <span class="nav__txt">Reportes</span>
-</a>
