@@ -13,13 +13,14 @@
 const Vault = (() => {
   const TESTIGO_CANARY = 'FEMSA_ZERO_KNOWLEDGE_CANARY_V1';
   const STORE_META = '__vault_meta__';
-  const TIEMPO_INACTIVIDAD_MS = 15 * 60 * 1000; // 15 minutos
   const CLAVE_LICENCIA_ADMIN = 'FEMSA-ADMIN-2026';
 
   /** Clave maestra y rol activos: sólo viven en esta clausura privada en memoria RAM. */
   let claveActivaRAM = null;
   let rolActivoRAM = null; // 'admin' | 'operador'
   let timerInactividad = null;
+  let inactividadActiva = true;
+  let inactividadMs = 15 * 60 * 1000; // 15 minutos por defecto
   let intentosFallidos = 0;
   const suscriptores = new Set();
 
@@ -47,11 +48,22 @@ const Vault = (() => {
   }
 
   function reiniciarTimerInactividad() {
-    if (timerInactividad) clearTimeout(timerInactividad);
-    if (!claveActivaRAM) return;
+    if (timerInactividad) {
+      clearTimeout(timerInactividad);
+      timerInactividad = null;
+    }
+    if (!claveActivaRAM || !inactividadActiva) return;
     timerInactividad = setTimeout(() => {
       bloquear('INACTIVIDAD');
-    }, TIEMPO_INACTIVIDAD_MS);
+    }, inactividadMs);
+  }
+
+  function configurarInactividad({ activo, minutos } = {}) {
+    if (typeof activo === 'boolean') inactividadActiva = activo;
+    if (Number.isFinite(Number(minutos)) && Number(minutos) > 0) {
+      inactividadMs = Number(minutos) * 60 * 1000;
+    }
+    reiniciarTimerInactividad();
   }
 
   /** Registra listeners de actividad humana para mantener viva la sesión mientras se usa. */
@@ -222,6 +234,67 @@ const Vault = (() => {
     notificar('LOCKED', { razon });
   }
 
+  async function cambiarPassword(db, passActual, passNueva, onRekeyData) {
+    if (!passActual) throw new Error('Introduce tu contraseña actual.');
+    if (!passNueva || String(passNueva).length < 6) {
+      throw new Error('La nueva contraseña debe tener al menos 6 caracteres.');
+    }
+
+    const config = await obtenerMetaBoveda(db);
+    if (!config) {
+      throw new Error('No hay una bóveda configurada en este equipo.');
+    }
+
+    const oldKey = await CryptoEngine.derivarClaveMaestra(passActual, config.salt);
+    let testigoDescifrado;
+    try {
+      testigoDescifrado = await CryptoEngine.descifrarPayload(
+        oldKey,
+        config.authIv,
+        config.authTag
+      );
+      if (!testigoDescifrado || testigoDescifrado.canary !== TESTIGO_CANARY) {
+        throw new Error('CANARY_MISMATCH');
+      }
+    } catch {
+      throw new Error('La contraseña actual es incorrecta.');
+    }
+
+    const newSalt = CryptoEngine.generarBytesAleatorios(CryptoEngine.SALT_BYTES);
+    const newKey = await CryptoEngine.derivarClaveMaestra(passNueva, newSalt);
+
+    if (typeof onRekeyData === 'function') {
+      await onRekeyData(oldKey, newKey);
+    }
+
+    const rol = testigoDescifrado.rol === 'admin' ? 'admin' : 'operador';
+    const nuevoTestigo = {
+      canary: TESTIGO_CANARY,
+      rol,
+      createdAt: testigoDescifrado.createdAt || config.creadoEn || new Date().toISOString(),
+      rotatedAt: new Date().toISOString(),
+    };
+    const { iv: newAuthIv, ciphertext: newAuthTag } = await CryptoEngine.cifrarPayload(newKey, nuevoTestigo);
+
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_META], 'readwrite');
+      tx.objectStore(STORE_META).put({
+        ...config,
+        id: 'config',
+        salt: newSalt,
+        authIv: newAuthIv,
+        authTag: newAuthTag,
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(new Error('No se pudo actualizar la configuración de la bóveda.'));
+    });
+
+    claveActivaRAM = newKey;
+    rolActivoRAM = rol;
+    reiniciarTimerInactividad();
+    return true;
+  }
+
   function suscribir(fn) {
     suscriptores.add(fn);
     return () => suscriptores.delete(fn);
@@ -246,6 +319,8 @@ const Vault = (() => {
     inicializarBoveda,
     desbloquear,
     bloquear,
+    configurarInactividad,
+    cambiarPassword,
     suscribir,
   };
 })();

@@ -269,6 +269,48 @@ const DB = (() => {
     return contenido.datos.filas?.length || 0;
   }
 
+  async function leerTodosCrudos(db, storeName) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([storeName], 'readonly');
+      const req = tx.objectStore(storeName).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(new Error(`Error al leer ${storeName}.`));
+    });
+  }
+
+  async function escribirTodosCrudos(db, storeName, registros) {
+    if (!registros.length) return;
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([storeName], 'readwrite');
+      const store = tx.objectStore(storeName);
+      registros.forEach((rec) => store.put(rec));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(new Error(`Error al actualizar ${storeName}.`));
+    });
+  }
+
+  async function cambiarPassword(passActual, passNueva) {
+    const db = await abrir();
+    return Vault.cambiarPassword(db, passActual, passNueva, async (oldKey, newKey) => {
+      for (const storeName of [STORE_DATOS, STORE_HISTORIAL]) {
+        const crudos = await leerTodosCrudos(db, storeName);
+        const recifrados = [];
+        for (const rec of crudos) {
+          if (!rec || !rec.iv || !rec.ciphertext) continue;
+          const plano = await CryptoEngine.descifrarPayload(oldKey, rec.iv, rec.ciphertext);
+          const { iv, ciphertext } = await CryptoEngine.cifrarPayload(newKey, plano);
+          recifrados.push({
+            ...rec,
+            iv,
+            ciphertext,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        await escribirTodosCrudos(db, storeName, recifrados);
+      }
+    });
+  }
+
   return {
     abrir,
     estaBloqueada,
@@ -277,6 +319,7 @@ const DB = (() => {
     tieneBovedaConfigurada,
     crearBoveda,
     desbloquearBoveda,
+    cambiarPassword,
     infoCriptografica,
     guardarCarga,
     obtenerActual,

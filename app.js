@@ -21,6 +21,10 @@ const PALETA = window.CIFRACONTROL_PALETA || Object.freeze({
 const config = {
   /** Sidebar plegado en escritorio. */
   sidebarPlegado: false,
+  /** Bloqueo automático por inactividad. */
+  inactividadActiva: true,
+  /** Minutos de inactividad antes de bloquear (5, 10, 20 o 60). */
+  inactividadMinutos: 10,
 };
 
 const estado = {
@@ -464,28 +468,28 @@ async function apiLocal(ruta, params = {}) {
         resumen: { operativos: 3, degradados: 0, caidos: 0 },
         filas: [
           {
-            servicio: 'Bóveda Cifrada IndexedDB (AES-GCM-256)',
+            servicio: 'IndexedDB',
             estado: 'operativo',
             uptime: 100,
             latencia: 1,
             intentos: 0,
-            hostname: `vault://cifracontrol_zk_vault_db (${total} registros cifrados)`,
+            hostname: `Guarda tus datos de forma local y segura en tu navegador (${total} registros).`,
           },
           {
-            servicio: 'Derivación PBKDF2-HMAC-SHA256 (Web Crypto)',
+            servicio: 'Web Crypto',
             estado: 'operativo',
             uptime: 100,
             latencia: 2,
             intentos: 0,
-            hostname: 'crypto.subtle · 250,000 iteraciones · extractable: false',
+            hostname: 'Protege y cifra tu información con tu contraseña.',
           },
           {
-            servicio: 'Motor Python Pyodide (Wasm)',
+            servicio: 'Motor Python',
             estado: 'operativo',
             uptime: 100,
             latencia: 4,
             intentos: 0,
-            hostname: meta ? `Última carga: ${meta.archivo_origen}` : 'Sin cargas previas (0 registros)',
+            hostname: 'Procesa y limpia los archivos Excel que subes al panel.',
           },
         ],
       };
@@ -681,15 +685,16 @@ function refrescarTodo() {
  * ========================================================================== */
 
 const VISTAS = {
-  resumen:     { titulo: 'Resumen de cifrado',    sub: 'Datos reales procesados por el pipeline en tu Base de Datos Local' },
-  inventario:  { titulo: 'Inventario',            sub: 'Registros limpios cargados en tu sesión local' },
-  tecnologias: { titulo: 'Tecnologías',           sub: 'Distribución tecnológica detectada en el archivo' },
-  excepciones: { titulo: 'Excepciones y Flags',   sub: 'Incoherencias y alertas detectadas por el pipeline de Python' },
-  carga:       { titulo: 'Cargar Excel / CSV',    sub: 'Sube tu archivo → Limpieza en Python → Base de Datos Local' },
-  ajustes:     { titulo: 'Ajustes y Respaldo',    sub: 'Preferencias y exportación/importación de tu Base de Datos' },
-  reportes:    { titulo: 'Reportes',              sub: 'Genera reportes personalizados a partir de datos reales'},
-  historial:   { titulo: 'Historial de datos',    sub: 'Consulta y compara cargas históricas sin modificar la carga actual' },
-  dashboard:   { titulo: 'Dashboard global',      sub: 'Explorador mundial de cifrado y seguridad'}
+  resumen:       { titulo: 'Resumen de cifrado' },
+  inventario:    { titulo: 'Inventario' },
+  tecnologias:   { titulo: 'Tecnologías' },
+  excepciones:   { titulo: 'Excepciones y Flags' },
+  carga:         { titulo: 'Cargar Excel / CSV' },
+  ajustes:       { titulo: 'Ajustes y Respaldo' },
+  visualizacion: { titulo: 'Visualización' },
+  reportes:      { titulo: 'Reportes' },
+  historial:     { titulo: 'Historial de datos' },
+  dashboard:     { titulo: 'Dashboard global' }
 };
 
 const MODULOS_POR_VISTA = {
@@ -709,7 +714,6 @@ function irA(vista, { empujar = true } = {}) {
   estado.vista = vista;
   const meta = VISTAS[vista];
   document.getElementById('tituloVista').textContent = meta.titulo;
-  document.getElementById('subtituloVista').textContent = meta.sub;
   document.title = `${meta.titulo} · CifraControl`;
 
   document.querySelectorAll('.vista').forEach((v) => {
@@ -748,12 +752,14 @@ const app = document.querySelector('.app');
 function abrirMenuMovil() {
   app.classList.add('is-abierto');
   document.getElementById('capa').hidden = false;
-  document.getElementById('btnMenu').setAttribute('aria-expanded', 'true');
+  document.getElementById('btnMenu')?.setAttribute('aria-expanded', 'true');
+  document.getElementById('btnMenuSidebar')?.setAttribute('aria-expanded', 'true');
 }
 function cerrarMenuMovil() {
   app.classList.remove('is-abierto');
   document.getElementById('capa').hidden = true;
-  document.getElementById('btnMenu').setAttribute('aria-expanded', 'false');
+  document.getElementById('btnMenu')?.setAttribute('aria-expanded', 'false');
+  document.getElementById('btnMenuSidebar')?.setAttribute('aria-expanded', 'false');
 }
 
 function alternarMenu() {
@@ -766,7 +772,11 @@ function alternarMenu() {
 }
 
 function aplicarSidebar() {
+  app.classList.remove('is-hover-abierto');
   app.classList.toggle('is-plegado', config.sidebarPlegado);
+  const expandido = String(!config.sidebarPlegado);
+  document.getElementById('btnMenu')?.setAttribute('aria-expanded', expandido);
+  document.getElementById('btnMenuSidebar')?.setAttribute('aria-expanded', expandido);
   const cb = document.getElementById('setSidebar');
   if (cb) cb.checked = config.sidebarPlegado;
   try { localStorage.setItem('cc:sidebar', config.sidebarPlegado ? '1' : '0'); } catch { /* noop */ }
@@ -1944,7 +1954,7 @@ function conectarCarga() {
  * ========================================================================== */
 
 function conectarNavegacion() {
-  document.querySelectorAll('.nav__link').forEach((a) => {
+  document.querySelectorAll('[data-ir]').forEach((a) => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
       irA(a.dataset.ir);
@@ -1953,6 +1963,21 @@ function conectarNavegacion() {
   });
 
   document.getElementById('btnMenu').addEventListener('click', alternarMenu);
+  const btnMenuSidebar = document.getElementById('btnMenuSidebar');
+  const sidebarEl = document.getElementById('sidebar');
+  if (btnMenuSidebar) {
+    btnMenuSidebar.addEventListener('click', alternarMenu);
+    btnMenuSidebar.addEventListener('mouseenter', () => {
+      if (!window.matchMedia('(max-width: 860px)').matches && app.classList.contains('is-plegado')) {
+        app.classList.add('is-hover-abierto');
+      }
+    });
+  }
+  if (sidebarEl) {
+    sidebarEl.addEventListener('mouseleave', () => {
+      app.classList.remove('is-hover-abierto');
+    });
+  }
   document.getElementById('capa').addEventListener('click', cerrarMenuMovil);
 
   window.addEventListener('popstate', () => irA((location.hash || '#/dashboard').slice(2), { empujar: false }));
@@ -2034,7 +2059,7 @@ function aplicarPermisosRol() {
 
   const badgeRol = document.getElementById('badgeRolUsuario');
   if (badgeRol) {
-    badgeRol.textContent = esAdmin ? 'FEMSA · ADMIN' : 'FEMSA · LECTOR';
+    badgeRol.textContent = esAdmin ? 'ADMIN' : 'OPERADOR';
     badgeRol.title = esAdmin
       ? 'Rol Administrador: Carga de Excel/CSV + Exportación/Importación .json cifrado'
       : 'Rol Operador/Lector: Consulta y carga exclusiva de paquetes .json cifrados';
@@ -2127,7 +2152,78 @@ function conectarAjustes() {
     aplicarSidebar();
   });
 
-  document.getElementById('btnComprobarSalud').addEventListener('click', comprobarSalud);
+  const setInactividad = document.getElementById('setInactividad');
+  const setInactividadMinutos = document.getElementById('setInactividadMinutos');
+  if (setInactividad) {
+    setInactividad.addEventListener('change', (e) => {
+      aplicarInactividad(e.target.checked, Number(setInactividadMinutos?.value || config.inactividadMinutos));
+    });
+  }
+  if (setInactividadMinutos) {
+    setInactividadMinutos.addEventListener('change', (e) => {
+      aplicarInactividad(config.inactividadActiva, Number(e.target.value));
+    });
+  }
+
+  const btnCambiarPass = document.getElementById('btnCambiarPass');
+  const btnOlvidePass = document.getElementById('btnOlvidePass');
+  const msgCambiarPass = document.getElementById('msgCambiarPass');
+  let timerMsgPass = null;
+  const mostrarMsgPass = (texto, esError = false) => {
+    if (!msgCambiarPass) return;
+    if (timerMsgPass) clearTimeout(timerMsgPass);
+    msgCambiarPass.textContent = texto;
+    msgCambiarPass.style.color = esError ? 'var(--peligro)' : 'var(--exito)';
+    msgCambiarPass.hidden = false;
+    if (!esError) {
+      timerMsgPass = setTimeout(() => {
+        msgCambiarPass.hidden = true;
+      }, 10000);
+    }
+  };
+  if (btnCambiarPass) {
+    btnCambiarPass.addEventListener('click', async () => {
+      const inputActual = document.getElementById('inputPassActual');
+      const inputNueva = document.getElementById('inputPassNueva');
+      const inputConfirm = document.getElementById('inputPassNuevaConfirm');
+      const actual = inputActual?.value || '';
+      const nueva = inputNueva?.value || '';
+      const confirmPass = inputConfirm?.value || '';
+
+      if (msgCambiarPass) msgCambiarPass.hidden = true;
+      if (!actual) return mostrarMsgPass('Ingresa tu contraseña actual.', true);
+      if (nueva.length < 6) return mostrarMsgPass('La nueva contraseña debe tener al menos 6 caracteres.', true);
+      if (nueva !== confirmPass) return mostrarMsgPass('Las contraseñas nuevas no coinciden.', true);
+
+      const txtOriginal = btnCambiarPass.textContent;
+      btnCambiarPass.disabled = true;
+      btnCambiarPass.textContent = 'Actualizando…';
+      try {
+        await DB.cambiarPassword(actual, nueva);
+        if (inputActual) inputActual.value = '';
+        if (inputNueva) inputNueva.value = '';
+        if (inputConfirm) inputConfirm.value = '';
+        mostrarMsgPass('Contraseña actualizada correctamente.');
+        avisar('Contraseña actualizada', 'Tus datos se han vuelto a cifrar con tu nueva contraseña.', 'exito');
+      } catch (err) {
+        mostrarMsgPass(err.message || 'No se pudo cambiar la contraseña.', true);
+      } finally {
+        btnCambiarPass.disabled = false;
+        btnCambiarPass.textContent = txtOriginal;
+      }
+    });
+  }
+  if (btnOlvidePass) {
+    btnOlvidePass.addEventListener('click', async () => {
+      if (!confirm('Si olvidaste tu contraseña se borrarán todos los datos locales para que puedas registrar una llave nueva. ¿Deseas continuar?')) return;
+      await DB.restablecerFabrica();
+      estado.cache = {};
+      avisar('Datos borrados', 'Registra una nueva contraseña para comenzar.', 'alerta');
+      await mostrarModalBoveda('crear');
+    });
+  }
+
+  document.getElementById('btnComprobarSalud')?.addEventListener('click', comprobarSalud);
 
   const btnRestablecerFabrica = document.getElementById('btnRestablecerFabrica');
   if (btnRestablecerFabrica) {
@@ -2382,12 +2478,33 @@ function conectarBoveda() {
       estado.cache = {};
       await mostrarModalBoveda('desbloquear');
       if (detalle === 'INACTIVITY_TIMEOUT') {
-        avisar('Sesión bloqueada por inactividad', 'La CryptoKey fue destruida de la memoria RAM tras 15 minutos sin actividad.', 'alerta');
+        const lapso = config.inactividadMinutos === 60 ? '1 hora' : `${config.inactividadMinutos} minutos`;
+        avisar('Sesión bloqueada por inactividad', `La sesión se bloqueó tras ${lapso} sin actividad.`, 'alerta');
       } else if (detalle === 'MANUAL') {
         avisar('Sesión cerrada', 'Has salido al inicio y la clave en memoria RAM fue destruida.', 'info');
       }
     }
   });
+}
+
+function aplicarInactividad(activa, minutos) {
+  const opcionesValidas = [5, 10, 20, 60];
+  const minValido = opcionesValidas.includes(Number(minutos)) ? Number(minutos) : 10;
+  config.inactividadActiva = Boolean(activa);
+  config.inactividadMinutos = minValido;
+
+  const cb = document.getElementById('setInactividad');
+  const filaTiempo = document.getElementById('filaInactividadTiempo');
+  const sel = document.getElementById('setInactividadMinutos');
+  if (cb) cb.checked = config.inactividadActiva;
+  if (filaTiempo) filaTiempo.hidden = !config.inactividadActiva;
+  if (sel) sel.value = String(minValido);
+
+  Vault.configurarInactividad({ activo: config.inactividadActiva, minutos: minValido });
+  try {
+    localStorage.setItem('cc:inactividad', config.inactividadActiva ? '1' : '0');
+    localStorage.setItem('cc:inactividadMin', String(minValido));
+  } catch { /* noop */ }
 }
 
 function restaurarPreferencias() {
@@ -2402,6 +2519,11 @@ function restaurarPreferencias() {
     app.classList.toggle('is-plegado', config.sidebarPlegado);
     const cb = document.getElementById('setSidebar');
     if (cb) cb.checked = config.sidebarPlegado;
+
+    localStorage.removeItem('cc:privacidad');
+    const inacActiva = localStorage.getItem('cc:inactividad');
+    const inacMin = Number(localStorage.getItem('cc:inactividadMin') || 10);
+    aplicarInactividad(inacActiva === null ? true : inacActiva === '1', inacMin);
   } catch { /* noop */ }
 }
 
