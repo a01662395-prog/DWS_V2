@@ -424,8 +424,8 @@
     <article class="tarjeta global-recencia-tarjeta">
       <header class="tarjeta__cab">
         <div>
-          <h2>Cumplimiento</h2>
-          <p>Estado de cifrado reportado por los equipos</p>
+          <h2>Estado de cumplimiento</h2>
+          <p>Distribución de equipos según su nivel de cumplimiento</p>
         </div>
       </header>
       <div class="tarjeta__cuerpo">
@@ -459,8 +459,8 @@
       <article class="tarjeta global-gestion-tarjeta">
         <header class="tarjeta__cab">
           <div>
-            <h2>Cobertura de gestión</h2>
-            <p>Equipos administrados y conectados a la organización</p>
+            <h2>Gestión de dispositivos</h2>
+            <p>Porcentaje de equipos registrados en MDM y Active Directory</p>
           </div>
         </header>
         <div class="tarjeta__cuerpo" id="globalGestionGrafica"></div>
@@ -470,7 +470,7 @@
         <header class="tarjeta__cab">
           <div>
             <h2>Excepciones y alertas</h2>
-            <p>Equipos con problemas que necesitan revisión.</p>
+            <p>Equipos con problemas que necesitan revisión</p>
           </div>
           <span class="global-criticos-contador" id="globalCriticosConteo">0 alertas</span>
         </header>
@@ -483,7 +483,7 @@
             </div>
             <div id="globalCriticosGrafica"></div>
           </div>
-          <p class="global-criticos-nota">Para ver más información, consulta la pestaña Equipos críticos.</p>
+          <p class="global-criticos-nota">Para ver más información, consulta la pestaña Alertas de cifrado</p>
         </div>
       </article>
 
@@ -542,8 +542,8 @@
             <article class="tarjeta" id="panelCargaAdmin">
               <header class="tarjeta__cab">
                 <div>
-                  <h2>Ingesta de hojas de cálculo (Exclusivo Admin)</h2>
-                  <p>Procesamiento de datos y almacenamiento en tu base de datos local</p>
+                  <h2>Carga de archivos</h2>
+                  <p>Importa archivos Excel o CSV para actualizar la información del sistema</p>
                 </div>
                 <span class="pastilla pastilla--protegido">ROL: ADMIN</span>
               </header>
@@ -600,7 +600,7 @@
           <div class="modulo" data-modulo="cola">
             <article class="tarjeta">
               <header class="tarjeta__cab">
-                <div><h2>Verificación de Base de Datos</h2><p>Conteo de registros cargados y gráfica en vivo</p></div>
+                <div><h2>Resumen de datos cargados</h2><p>Consulta la cantidad de registros y columnas disponibles en el sistema</p></div>
                 <div style="display:flex;gap:8px">
                   <button class="btn" id="btnVaciarBD" title="Vaciar base de datos local"><svg class="ico"><use href="#i-basura"></use></svg>Vaciar BD</button>
                   <button class="btn" id="btnRefrescarCola" aria-label="Actualizar verificación"><svg class="ico"><use href="#i-refrescar"></use></svg></button>
@@ -691,7 +691,7 @@
     <header class="tarjeta__cab">
       <div>
         <h2>Reportes automáticos</h2>
-        <p>Genera análisis ejecutivos y técnicos a partir de los datos cargados.</p>
+        <p>Genera análisis ejecutivos y técnicos a partir de los datos cargados</p>
       </div>
     </header>
 
@@ -811,7 +811,7 @@
         <div class="modulo" data-modulo="historial">
           <article class="tarjeta">
             <header class="tarjeta__cab">
-              <div><h2>Historial de datos</h2><p>Consulta cargas anteriores sin modificar la información actual.</p></div>
+              <div><h2>Historial de datos</h2><p>Consulta cargas anteriores sin modificar la información actual</p></div>
               <div class="filtros">
                 <label class="campo campo--buscar"><svg class="ico"><use href="#i-buscar"></use></svg><input type="search" id="historialBuscar" placeholder="Buscar archivo" aria-label="Buscar cargas históricas"></label>
                 <input class="campo historial-fecha" id="historialDesde" type="date" aria-label="Fecha inicial">

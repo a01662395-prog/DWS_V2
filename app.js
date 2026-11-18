@@ -2950,14 +2950,39 @@ function reporteTabla(encabezados, filas, clase = '') {
   return `<div class="reporte-tabla reporte-tabla--analisis ${clase}"><table class="tabla"><thead><tr>${encabezados.map(encabezado => `<th>${reporteEsc(encabezado)}</th>`).join('')}</tr></thead><tbody>${filas.map(fila => `<tr>${fila.map(celda => `<td>${celda}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 
+
 function reporteMetadatos(analisis) {
   const filtros = reporteFiltrosActuales();
+
   const aplicados = [
-    ['Región', reporteTextoSeleccion(filtros.region, 'Todas')], ['País', reporteTextoSeleccion(filtros.pais, 'Todos')], ['Sistema operativo', reporteTextoSeleccion(filtros.sistema, 'Todos')],
-    ['Estado', reporteTextoSeleccion(filtros.estado, 'Todos')], ['Columnas', reporteTextoSeleccionColumnas(filtros.campo)], ['Valores', reporteTextoFiltrosValores(filtros.campo)], ['Búsqueda', filtros.buscar || 'Ninguna']
-  ].map(([nombre, valor]) => `<span><strong>${reporteEsc(nombre)}:</strong> ${reporteEsc(valor)}</span>`).join('');
-  return `<div class="reporte-metadatos"><span><strong>Generado:</strong> ${reporteEsc(analisis.fechaGeneracion)}</span><span><strong>Fecha de corte:</strong> ${reporteEsc(analisis.fechaCorte)}</span><span><strong>Filtros:</strong> ${aplicados}</span></div>`;
+    ['Región', reporteTextoSeleccion(filtros.region, 'Todas')],
+    ['País', reporteTextoSeleccion(filtros.pais, 'Todos')],
+    ['Sistema operativo', reporteTextoSeleccion(filtros.sistema, 'Todos')],
+    ['Estado', reporteTextoSeleccion(filtros.estado, 'Todos')],
+    ['Columnas', reporteTextoSeleccionColumnas(filtros.campo)],
+    ['Valores', reporteTextoFiltrosValores(filtros.campo)],
+    ['Búsqueda', filtros.buscar || 'Ninguna']
+  ].map(([nombre, valor]) =>
+    `<span class="reporte-filtro-item"><strong>${reporteEsc(nombre)}:</strong> ${reporteEsc(valor)}</span>`
+  ).join('');
+
+  return `
+    <div class="reporte-metadatos">
+      <div class="reporte-metadatos-fechas">
+        <span><strong>Generado:</strong> ${reporteEsc(analisis.fechaGeneracion)}</span>
+        <span><strong>Fecha de corte:</strong> ${reporteEsc(analisis.fechaCorte)}</span>
+      </div>
+
+      <div class="reporte-metadatos-filtros">
+        <strong>Filtros aplicados:</strong>
+        <div class="reporte-filtros-lista">
+          ${aplicados}
+        </div>
+      </div>
+    </div>
+  `;
 }
+
 
 function reporteInsights(analisis) {
   const { resumen, paisesConRiesgo, sistemas, regiones, mismatches } = analisis;
@@ -3112,7 +3137,7 @@ function renderReporteEjecutivo(analisis, paraPDF = false) {
   if (reporteContenidoActivo('comparacion') && reporteFuente === 'comparativo') bloques.push(reporteBloqueComparacion());
   if (reporteContenidoActivo('sistemas')) bloques.push(`<section class="reporte-bloque"><h3>Riesgos principales</h3>${reporteTabla(['Sistema', 'Total', 'Sin cifrar', '% cifrado'], soRows)}</section>`);
   if (reporteContenidoActivo('recomendaciones')) bloques.push(`<section class="reporte-bloque reporte-bloque--ancho"><h3>Recomendaciones y conclusiones</h3><ul class="reporte-lista">${reporteRecomendaciones(analisis).map(recomendacion => `<li>${recomendacion}</li>`).join('')}</ul></section>`);
-  const encabezado = `<div class="reporte-resumen-cabecera"><div><h3>Reporte ejecutivo</h3><p>Resumen para toma de decisiones de FEMSA.</p></div></div>${reporteMetadatos(analisis)}`;
+  const encabezado = `<div class="reporte-resumen-cabecera"><div><h3>Reporte ejecutivo</h3><p>Resumen para toma de decisiones de FEMSA</p></div></div>${reporteMetadatos(analisis)}`;
   const kpis = reporteContenidoActivo('resumen') ? `<div class="reporte-kpis"><div class="reporte-kpi"><strong>${r.total.toLocaleString('es-MX')}</strong><span>Equipos analizados</span></div><div class="reporte-kpi reporte-kpi--bueno"><strong>${r.protegido.toLocaleString('es-MX')} · ${reportePorcentaje(r.protegido, r.total)}</strong><span>Equipos cifrados</span></div><div class="reporte-kpi reporte-kpi--riesgo"><strong>${r.sin_cifrar.toLocaleString('es-MX')} · ${reportePorcentaje(r.sin_cifrar, r.total)}</strong><span>Equipos sin cifrar</span></div><div class="reporte-kpi"><strong>${(r.parcial + r.desconocido).toLocaleString('es-MX')}</strong><span>Parciales o sin información</span></div></div>` : '';
   return `${encabezado}${kpis}<div class="reporte-bloques">${bloques.join('')}</div>`;
 }
