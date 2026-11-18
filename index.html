@@ -310,6 +310,52 @@
 
   <!-- FILTROS -->
 
+  <!-- FILTROS MULTISELECCIÓN -->
+  <div class="global-filtros">
+    <div class="global-filtro-multi">
+      <label id="globalRegionLabel">Región</label>
+      <div class="global-multi" data-filtro="region">
+        <button type="button" class="global-multi-boton"
+                aria-labelledby="globalRegionLabel"
+                aria-expanded="false">
+          <span class="global-multi-texto">Todas las regiones</span>
+          <span>⌄</span>
+        </button>
+        <div class="global-multi-menu" id="globalRegionOpciones" hidden></div>
+      </div>
+    </div>
+
+    <div class="global-filtro-multi">
+      <label id="globalPaisLabel">País</label>
+      <div class="global-multi" data-filtro="pais">
+        <button type="button" class="global-multi-boton"
+                aria-labelledby="globalPaisLabel"
+                aria-expanded="false">
+          <span class="global-multi-texto">Todos los países</span>
+          <span>⌄</span>
+        </button>
+        <div class="global-multi-menu" id="globalPaisOpciones" hidden></div>
+      </div>
+    </div>
+
+    <div class="global-filtro-multi">
+      <label id="globalEstadoLabel">Estado de cifrado</label>
+      <div class="global-multi" data-filtro="estado">
+        <button type="button" class="global-multi-boton"
+                aria-labelledby="globalEstadoLabel"
+                aria-expanded="false">
+          <span class="global-multi-texto">Todos los estados</span>
+          <span>⌄</span>
+        </button>
+        <div class="global-multi-menu" id="globalEstadoOpciones" hidden>
+          <label><input type="checkbox" value="protegido"> Protegido</label>
+          <label><input type="checkbox" value="parcial"> Parcial</label>
+          <label><input type="checkbox" value="sin_cifrar"> Sin cifrar</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- INDICADORES -->
   
 <div class="global-kpis">

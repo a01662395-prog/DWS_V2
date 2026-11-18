@@ -17,12 +17,6 @@
   padding: 12px; margin-bottom: 12px; background: var(--superficie);
   border: 1px solid var(--borde); border-radius: var(--r-lg); box-shadow: var(--sombra-sm);
 }
-
-/* Los filtros globales fueron retirados de la interfaz; mantener este
-   resguardo evita que una versión antigua del marcado vuelva a mostrarlos. */
-.global-filtros {
-  display: none !important;
-}
 .global-filtros label {
   display: grid; gap: 6px; color: var(--texto-med); font-size: 12px; font-weight: 500;
 }
