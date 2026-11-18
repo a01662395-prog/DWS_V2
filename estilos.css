@@ -1,33 +1,40 @@
 /* ============================================================================
  *  CifraControl · FEMSA Corporate Edition (Staff UI Engineer Standard)
  *  Aesthetic: Utilitarian, High-Density, Sober (Linear / Vercel / Supabase)
- *  Brand Accent: FEMSA Crimson (#982B3B) · Neutral Base: Semantic palette
+ *  Brand Accent: vino tinto (#640017) · Base corporativa oliva, café y crema
  * ========================================================================== */
 
 /* ==========================================================================
- *  1. TOKENS · Paleta semántica + identidad FEMSA (#982B3B)
+ *  1. TOKENS · Paleta corporativa + semántica de seguridad
  * ========================================================================== */
 :root {
-  /* Marca FEMSA */
-  --femsa-50:  #FDF2F3;
-  --femsa-100: #FCE7E9;
-  --femsa-200: #F8D0D5;
-  --femsa-300: #F0A8B1;
-  --femsa-400: #E27180;
-  --femsa-500: #B83847;
-  --femsa-600: #982B3B;   /* Identidad FEMSA */
-  --femsa-700: #7E222D;
-  --femsa-800: #681D26;
-  --femsa-tinte: rgba(155, 44, 57, 0.075);
+  /* Colores corporativos base solicitados */
+  --color-oliva: #5A5E27;
+  --color-vino:  #640017;
+  --color-cafe:  #2F1B1A;
+  --color-crema: #EFEFC9;
+  --oliva-tinte: rgba(90, 94, 39, 0.12);
+  --oliva-borde: rgba(90, 94, 39, 0.28);
 
-  /* Superficies · Escala Monocromática Zinc estricta */
+  /* Marca y superficies corporativas */
+  --femsa-50:  var(--color-crema);
+  --femsa-100: #E5E5B5;
+  --femsa-200: #D3D48F;
+  --femsa-300: #B5B967;
+  --femsa-400: #8E933F;
+  --femsa-500: var(--color-oliva);
+  --femsa-600: var(--color-vino);   /* Vino tinto: identidad y navegación */
+  --femsa-700: #4B0011;
+  --femsa-800: var(--color-cafe);   /* Café oscuro */
+  --femsa-tinte: rgba(100, 0, 23, 0.08);
+
   --fondo:        #F7F8FA;
   --fondo-alt:    #F0F2F5;
   --superficie:   #FFFFFF;
   --borde:        #E2E5EA;
   --borde-fuerte: #CBD1D9;
 
-  /* Tipografía · Zinc */
+  /* Tipografía corporativa */
   --texto:     #20242B;
   --texto-med: #545B66;
   --texto-baj: #737B87;
@@ -45,7 +52,7 @@
   --sombra-sm: 0 1px 2px 0 rgba(9, 9, 11, 0.04);
   --sombra:    0 1px 3px 0 rgba(9, 9, 11, 0.07), 0 1px 2px -1px rgba(9, 9, 11, 0.05);
   --sombra-lg: 0 12px 28px -4px rgba(9, 9, 11, 0.12), 0 4px 10px -2px rgba(9, 9, 11, 0.06);
-  --anillo:    0 0 0 2px rgba(155, 44, 57, 0.25);
+  --anillo:    0 0 0 2px rgba(100, 0, 23, 0.28);
 
   /* Geometría y Ritmo Espacial (múltiplos de 4px, bordes técnicos precisos) */
   --r-sm: 6px;
@@ -60,18 +67,20 @@
   --transicion: 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Modo Oscuro Profundo (#09090B Zinc-950) */
+/* Modo oscuro corporativo */
 [data-tema="oscuro"] {
-  --femsa-50:    rgba(225, 73, 91, 0.12);
-  --femsa-600:   #C45A68;
-  --femsa-700:   #D97884;
-  --femsa-tinte: rgba(196, 90, 104, 0.16);
+  --femsa-50:    rgba(239, 239, 201, 0.12);
+  --femsa-600:   #9A2948;
+  --femsa-700:   #C05A73;
+  --femsa-tinte: rgba(154, 41, 72, 0.2);
+  --oliva-tinte: rgba(90, 94, 39, 0.24);
+  --oliva-borde: rgba(239, 239, 201, 0.32);
 
-  --fondo:        #09090B;   /* zinc-950 */
-  --fondo-alt:    #18181B;   /* zinc-900 */
-  --superficie:   #121215;   /* superficie sólida elevada */
-  --borde:        #27272A;   /* zinc-800: 1px nítido */
-  --borde-fuerte: #3F3F46;   /* zinc-700 */
+  --fondo:        #09090B;
+  --fondo-alt:    #18181B;
+  --superficie:   #121215;
+  --borde:        #27272A;
+  --borde-fuerte: #3F3F46;
 
   --texto:     #F5F7FA;
   --texto-med: #C2C8D0;
@@ -240,7 +249,7 @@ code { font-family: var(--mono); font-size: 0.88em; }
 }
 .nav__badge--alerta  { background: var(--alerta-fondo); color: var(--alerta); border-color: rgba(217,119,6,.25); }
 .nav__badge--peligro { background: var(--peligro-fondo); color: var(--peligro); border-color: rgba(220,38,38,.25); }
-.nav__badge--info    { background: var(--femsa-tinte); color: var(--femsa-600); border-color: rgba(155,44,57,.25); }
+.nav__badge--info    { background: var(--femsa-tinte); color: var(--femsa-600); border-color: rgba(100,0,23,.25); }
 
 .sidebar__pie { padding: 10px; border-top: 1px solid var(--borde); flex: none; }
 .salud {
@@ -481,7 +490,7 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .kpi__label { color: var(--texto-med); font-size: 12px; font-weight: 500; }
 .kpi__icono {
   width: 26px; height: 26px; border-radius: var(--r-sm); display: grid; place-items: center;
-  background: var(--fondo-alt); border: 1px solid var(--borde);
+  background: var(--oliva-tinte); border: 1px solid var(--oliva-borde);
   color: var(--kpi-color, var(--femsa-600)); flex: none;
 }
 .kpi__valor {
@@ -567,7 +576,7 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   width: 26px; height: 26px; flex: none; border-radius: var(--r-sm); display: grid;
   place-items: center; font-family: var(--mono); font-size: 10.5px; font-weight: 600;
   color: var(--femsa-600); background: var(--femsa-tinte);
-  border: 1px solid rgba(155, 44, 57, 0.2);
+  border: 1px solid rgba(100, 0, 23, 0.2);
 }
 .celda-activo strong { display: block; font-weight: 600; font-size: 12.5px; }
 .celda-activo small { color: var(--texto-baj); font-size: 11px; }
@@ -585,7 +594,7 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .et--peligro { background: var(--peligro-fondo); color: var(--peligro); border-color: rgba(220, 38, 38, 0.25); }
 .et--info    { background: rgba(37, 99, 235, 0.1); color: var(--info); border-color: rgba(37, 99, 235, 0.22); }
 .et--neutro  { background: var(--fondo-alt); color: var(--texto-med); border-color: var(--borde); }
-.et--violeta { background: var(--femsa-tinte); color: var(--femsa-600); border-color: rgba(155, 44, 57, 0.25); }
+.et--violeta { background: var(--femsa-tinte); color: var(--femsa-600); border-color: rgba(100, 0, 23, 0.25); }
 [data-tema="oscuro"] .et--exito { color: #34D399; }
 [data-tema="oscuro"] .et--info  { color: #60A5FA; }
 
@@ -899,7 +908,7 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   letter-spacing: 0.06em;
   color: var(--femsa-600);
   background: var(--femsa-tinte);
-  border: 1px solid rgba(155, 44, 57, 0.25);
+  border: 1px solid rgba(100, 0, 23, 0.25);
   padding: 2px 6px;
   border-radius: 4px;
   margin-bottom: 6px;
@@ -1611,7 +1620,7 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 #mapaMundial {
   width: 100%; height: 250px; min-height: 250px; margin-inline: auto;
   overflow: hidden; position: relative;
-  border: 1px solid var(--borde); border-radius: var(--r); background: var(--fondo-alt);
+  border: 1px solid var(--borde); border-radius: var(--r); background: #F4F6FB;
 }
 #mapaMundial canvas { display: block; }
 .global-mapa-svg { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }

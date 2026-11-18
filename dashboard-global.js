@@ -12,7 +12,7 @@
     alerta: '#E5A12D',
     desconocido: '#9CA3AF',
     info: '#487DA8',
-    femsa: '#982B3B',
+    femsa: '#640017',
     neutro: '#E2E5EA'
   });
   window.CIFRACONTROL_PALETA = PALETA;

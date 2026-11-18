@@ -11,7 +11,7 @@
 'use strict';
 
 const PALETA = window.CIFRACONTROL_PALETA || Object.freeze({
-  exito: '#198765', peligro: '#DC3545', alerta: '#E5A12D', desconocido: '#9CA3AF', info: '#487DA8', femsa: '#982B3B'
+  exito: '#198765', peligro: '#DC3545', alerta: '#E5A12D', desconocido: '#9CA3AF', info: '#487DA8', femsa: '#640017'
 });
 
 /* ==========================================================================
