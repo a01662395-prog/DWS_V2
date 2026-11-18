@@ -1,32 +1,30 @@
 /* ============================================================================
  *  CifraControl · FEMSA Corporate Edition (Staff UI Engineer Standard)
  *  Aesthetic: Utilitarian, High-Density, Sober (Linear / Vercel / Supabase)
- *  Brand Accent: vino tinto (#640017) · Base corporativa oliva, café y crema
+ *  Brand Accent: FEMSA blue · Base neutral with semantic security colors
  * ========================================================================== */
 
 /* ==========================================================================
  *  1. TOKENS · Paleta corporativa + semántica de seguridad
  * ========================================================================== */
 :root {
-  /* Colores corporativos base solicitados */
-  --color-oliva: #5A5E27;
-  --color-vino:  #640017;
-  --color-cafe:  #2F1B1A;
-  --color-crema: #EFEFC9;
-  --oliva-tinte: rgba(90, 94, 39, 0.12);
-  --oliva-borde: rgba(90, 94, 39, 0.28);
+  --sidebar-fondo: linear-gradient(180deg, #640017 0%, #38040B 100%);
+  --sidebar-texto: #FFFFFF;
+  --sidebar-muted: rgba(255, 255, 255, 0.76);
+  --sidebar-icono: #D4B66A;
+  --sidebar-activo: #EFEFC9;
 
   /* Marca y superficies corporativas */
-  --femsa-50:  var(--color-crema);
+  --femsa-50:  #EFEFC9;
   --femsa-100: #E5E5B5;
   --femsa-200: #D3D48F;
   --femsa-300: #B5B967;
   --femsa-400: #8E933F;
-  --femsa-500: var(--color-oliva);
-  --femsa-600: var(--color-vino);   /* Vino tinto: identidad y navegación */
-  --femsa-700: #4B0011;
-  --femsa-800: var(--color-cafe);   /* Café oscuro */
-  --femsa-tinte: rgba(100, 0, 23, 0.08);
+  --femsa-500: #8A5838;
+  --femsa-600: #640017;
+  --femsa-700: #38040B;
+  --femsa-800: #2F1B1A;
+  --femsa-tinte: rgba(100, 0, 23, 0.10);
 
   --fondo:        #F7F8FA;
   --fondo-alt:    #F0F2F5;
@@ -73,8 +71,11 @@
   --femsa-600:   #9A2948;
   --femsa-700:   #C05A73;
   --femsa-tinte: rgba(154, 41, 72, 0.2);
-  --oliva-tinte: rgba(90, 94, 39, 0.24);
-  --oliva-borde: rgba(239, 239, 201, 0.32);
+  --sidebar-fondo: linear-gradient(180deg, #38040B 0%, #2F1B1A 100%);
+  --sidebar-texto: #FFFFFF;
+  --sidebar-muted: rgba(255, 255, 255, 0.78);
+  --sidebar-icono: #D4B66A;
+  --sidebar-activo: #D4B66A;
 
   --fondo:        #09090B;
   --fondo-alt:    #18181B;
@@ -160,8 +161,8 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .sidebar {
   width: var(--barra);
   flex: none;
-  background: var(--superficie);
-  border-right: 1px solid var(--borde);
+  background: var(--sidebar-fondo);
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
   display: flex;
   flex-direction: column;
   position: sticky; top: 0;
@@ -203,12 +204,12 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .sidebar__marca {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   height: var(--alto-barra); padding: 0 12px 0 16px;
-  border-bottom: 1px solid var(--borde); flex: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14); flex: none;
 }
 
 .marca__femsa {
-  display: flex; align-items: center; flex: none;
-  color: var(--femsa-600);
+  display: grid; align-items: center; justify-items: start; gap: 2px; flex: none;
+  color: var(--sidebar-texto);
   text-decoration: none;
   border-radius: var(--r-sm);
   cursor: pointer;
@@ -222,11 +223,12 @@ code { font-family: var(--mono); font-size: 0.88em; }
   transition: width var(--transicion);
 }
 #btnMenu { display: none; }
+.sidebar__toggle { color: var(--sidebar-icono); }
 
 .nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 8px; }
 .nav__titulo {
   font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--texto-baj);
+  text-transform: uppercase; color: var(--sidebar-muted);
   padding: 12px 14px 4px;
   white-space: nowrap;
   transition: opacity 180ms ease;
@@ -236,16 +238,17 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .nav__link {
   position: relative; display: flex; align-items: center; gap: 12px;
   padding: 7px 14px; margin-bottom: 2px; border-radius: var(--r-sm);
-  color: var(--texto-med); text-decoration: none; font-weight: 500; font-size: 13px;
+  color: var(--sidebar-muted); text-decoration: none; font-weight: 500; font-size: 13px;
   transition: background var(--transicion), color var(--transicion), transform 80ms ease;
 }
-.nav__link:hover { background: var(--fondo-alt); color: var(--texto); }
+.nav__link:hover { background: rgba(255, 255, 255, 0.10); color: var(--sidebar-texto); }
+.nav__link .ico { color: inherit; }
 .nav__link:active { transform: scale(0.985); }
 .nav__link.is-activo {
-  background: var(--femsa-tinte);
-  color: var(--femsa-600);
+  background: var(--sidebar-activo);
+  color: var(--femsa-700);
   font-weight: 600;
-  box-shadow: inset 2px 0 0 var(--femsa-600);
+  box-shadow: inset 3px 0 0 var(--femsa-600);
 }
 .nav__txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 180ms ease; }
 
@@ -262,7 +265,7 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .nav__badge--peligro { background: var(--peligro-fondo); color: var(--peligro); border-color: rgba(220,38,38,.25); }
 .nav__badge--info    { background: var(--femsa-tinte); color: var(--femsa-600); border-color: rgba(100,0,23,.25); }
 
-.sidebar__pie { padding: 8px; border-top: 1px solid var(--borde); flex: none; }
+.sidebar__pie { padding: 8px; border-top: 1px solid rgba(255, 255, 255, 0.14); flex: none; }
 .sidebar__pie .nav__link { margin-bottom: 0; }
 .salud {
   display: flex; align-items: center; gap: 10px; padding: 7px 14px;
@@ -505,7 +508,7 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .kpi__label { color: var(--texto-med); font-size: 12px; font-weight: 500; }
 .kpi__icono {
   width: 26px; height: 26px; border-radius: var(--r-sm); display: grid; place-items: center;
-  background: var(--oliva-tinte); border: 1px solid var(--oliva-borde);
+  background: var(--femsa-tinte); border: 1px solid var(--borde);
   color: var(--kpi-color, var(--femsa-600)); flex: none;
 }
 .kpi__valor {

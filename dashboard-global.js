@@ -12,10 +12,17 @@
     alerta: '#E5A12D',
     desconocido: '#9CA3AF',
     info: '#487DA8',
-    femsa: '#640017',
+    femsa: '#C8102E',
     neutro: '#E2E5EA'
   });
   window.CIFRACONTROL_PALETA = PALETA;
+
+  const PALETA_MAPA = Object.freeze({
+    alta: '#198765',
+    intermedia: '#E5A12D',
+    critica: '#DC3545',
+    desconocida: '#9CA3AF'
+  });
 
   const colores = [PALETA.femsa, PALETA.info, PALETA.exito, PALETA.alerta, PALETA.desconocido];
 
@@ -69,6 +76,9 @@
   let mapaUltimoArrastre = 0;
   let filas = [];
   let filasActuales = [];
+  let historialCargas = [];
+  let cargaActual = null;
+  let mesSeleccionado = '';
 
 const filtrosMulti = {
   region: new Set(),
@@ -85,6 +95,88 @@ const opcionesFiltro = {
     { valor: 'sin_cifrar', texto: 'Sin cifrar' }
   ]
 };
+
+const mesesDashboard = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+function claveMes(fecha) {
+  const texto = String(fecha ?? '').trim();
+  const directo = texto.match(/^(\d{4})-(\d{2})/);
+  if (directo) return `${directo[1]}-${directo[2]}`;
+  const fechaNormalizada = new Date(fecha);
+  if (Number.isNaN(fechaNormalizada.getTime())) return '';
+  return `${fechaNormalizada.getFullYear()}-${String(fechaNormalizada.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function mesActual() {
+  return claveMes(new Date());
+}
+
+function fechaCarga(carga) {
+  return carga?.fechaCorte
+    || carga?.meta?.fecha_corte
+    || carga?.meta?.fechaCorte
+    || carga?.recibidoEn
+    || '';
+}
+
+function etiquetaMes(clave) {
+  const [anio, mes] = String(clave).split('-').map(Number);
+  return anio && mes >= 1 && mes <= 12
+    ? `${mesesDashboard[mes - 1]} de ${anio}`
+    : 'Mes sin fecha';
+}
+
+function cargaTieneDatos(carga) {
+  return Array.isArray(carga?.filas) && carga.filas.length > 0;
+}
+
+function ultimaCargaDelMes(cargas, clave) {
+  return cargas
+    .filter(carga => cargaTieneDatos(carga) && claveMes(fechaCarga(carga)) === clave)
+    .sort((a, b) => new Date(fechaCarga(b)).getTime() - new Date(fechaCarga(a)).getTime())[0] || null;
+}
+
+function actualizarSelectorMes(cargas) {
+  const selector = $('globalMes');
+  if (!selector) return;
+
+  const claves = new Set(cargas.map(fechaCarga).map(claveMes).filter(Boolean));
+  claves.add(mesActual());
+  const ordenadas = [...claves].sort((a, b) => b.localeCompare(a));
+  selector.replaceChildren();
+  ordenadas.forEach(clave => {
+    const opcion = document.createElement('option');
+    opcion.value = clave;
+    opcion.textContent = etiquetaMes(clave);
+    selector.append(opcion);
+  });
+
+  if (!ordenadas.includes(mesSeleccionado)) mesSeleccionado = mesActual();
+  selector.value = mesSeleccionado;
+}
+
+function seleccionarMes(clave) {
+  mesSeleccionado = clave || mesActual();
+  const candidatos = [...historialCargas];
+  if (cargaActual) candidatos.push(cargaActual);
+  const seleccionada = ultimaCargaDelMes(candidatos, mesSeleccionado);
+  filas = seleccionada?.filas || [];
+  filasActuales = filas;
+
+  filtrosMulti.region.clear();
+  filtrosMulti.pais.clear();
+  filtrosMulti.estado.clear();
+  opcionesFiltro.region = [...new Set(filas.map(regionFila).filter(Boolean).map(String))]
+    .sort((a, b) => a.localeCompare(b, 'es'))
+    .map(region => ({ valor: region, texto: region }));
+  actualizarMenuMulti('region');
+  actualizarMenuMulti('estado');
+  llenarPaises();
+  pintar();
+}
 
 function valoresFiltro(tipo) {
   return [...filtrosMulti[tipo]];
@@ -414,13 +506,14 @@ function pintarCoberturaGestion(filtradas) {
   const resumen = document.createElement('div');
   resumen.className = 'global-gestion-resumen';
 
-  indicadores.forEach(indicador => {
+  indicadores.forEach((indicador, indice) => {
     const item = document.createElement('div');
     item.className = 'global-gestion-indicador';
 
     const anillo = document.createElement('div');
     anillo.className = 'global-gestion-anillo';
     anillo.style.setProperty('--gestion-porcentaje', `${indicador.valor}%`);
+    anillo.style.setProperty('--gestion-color', indice === 0 ? PALETA.info : PALETA.exito);
     anillo.setAttribute('aria-label', `${indicador.valor.toFixed(1)}% ${indicador.etiqueta}`);
 
     const contenido = document.createElement('div');
@@ -747,10 +840,10 @@ function pintarGraficaCumplimiento(filtradas) {
     const ubicaciones = [...porUbicacion.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
-      .map(([etiqueta, valor]) => ({
+      .map(([etiqueta, valor], indice) => ({
         etiqueta,
         valor,
-        color: PALETA.info
+        color: [PALETA.info, PALETA.exito, PALETA.alerta, PALETA.femsa][indice % 4]
       }));
 
     const subtitulo = $('globalUbicacionSubtitulo');
@@ -958,24 +1051,19 @@ function llenarPaises() {
 
     try {
       const actual = await DB.obtenerActual();
-      filasActuales = actual.filas || [];
-      filas = filasActuales;
-      const regiones = [
-        ...new Set(
-          filas.map(regionFila).filter(Boolean).map(String)
-        )
-      ].sort((a, b) => a.localeCompare(b, 'es'));
-
-opcionesFiltro.region = regiones.map(region => ({
-  valor: region,
-  texto: region
-}));
-
-actualizarMenuMulti('region');
-actualizarMenuMulti('estado');
-
-      llenarPaises();
-      pintar();
+      cargaActual = actual?.filas?.length
+        ? {
+          ...actual,
+          recibidoEn: actual.meta?.procesado_en || actual.meta?.procesadoEn || new Date().toISOString(),
+          fechaCorte: actual.meta?.fecha_corte || actual.meta?.fechaCorte || null
+        }
+        : null;
+      historialCargas = typeof DB.listarHistorial === 'function'
+        ? (await DB.listarHistorial()).filter(cargaTieneDatos)
+        : [];
+      mesSeleccionado = mesActual();
+      actualizarSelectorMes([...historialCargas, ...(cargaActual ? [cargaActual] : [])]);
+      seleccionarMes(mesSeleccionado);
 
       if (!iniciado) {
         await crearMapa2D();
@@ -1045,6 +1133,12 @@ actualizarMenuMulti('estado');
     return PALETA.exito;
   }
 
+  function colorCoberturaMapa(porcentaje) {
+    if (porcentaje < 75) return PALETA_MAPA.critica;
+    if (porcentaje < 85) return PALETA_MAPA.intermedia;
+    return PALETA_MAPA.alta;
+  }
+
   function crearEstadisticasPaises(filasMapa) {
     const estadisticas = new Map();
 
@@ -1068,10 +1162,10 @@ actualizarMenuMulti('estado');
 
     leyenda.replaceChildren();
     [
-      ['Menos de 75%', PALETA.peligro],
-      ['75% a 84%', PALETA.alerta],
-      ['85% o más', PALETA.exito],
-      ['Sin información', PALETA.desconocido]
+      ['Menos de 75%', PALETA_MAPA.critica],
+      ['75% a 84%', PALETA_MAPA.intermedia],
+      ['85% o más', PALETA_MAPA.alta],
+      ['Sin información', PALETA_MAPA.desconocida]
     ].forEach(([texto, color]) => {
       const item = document.createElement('span');
       const muestra = document.createElement('i');
@@ -1093,7 +1187,7 @@ actualizarMenuMulti('estado');
 
       if (!estadistica || !estadistica.total) {
         elemento.style.display = '';
-        elemento.setAttribute('fill', PALETA.desconocido);
+      elemento.setAttribute('fill', PALETA_MAPA.desconocida);
         elemento.setAttribute(
           'aria-label',
           `${feature.properties.name}: sin información`
@@ -1104,7 +1198,7 @@ actualizarMenuMulti('estado');
 
       const porcentaje = (estadistica.cifrados / estadistica.total) * 100;
       elemento.style.display = '';
-      elemento.setAttribute('fill', colorCobertura(porcentaje));
+      elemento.setAttribute('fill', colorCoberturaMapa(porcentaje));
       elemento.setAttribute(
         'aria-label',
         `${feature.properties.name}: ${porcentaje.toFixed(1)}% de equipos cifrados`
@@ -1256,7 +1350,7 @@ actualizarMenuMulti('estado');
 
       const elemento = document.createElementNS(SVG_NS, 'path');
       elemento.setAttribute('d', crearRutaGeometria(feature.geometry));
-        elemento.setAttribute('fill', PALETA.desconocido);
+      elemento.setAttribute('fill', PALETA_MAPA.desconocida);
       elemento.setAttribute('stroke', 'rgba(255,255,255,0.7)');
       elemento.setAttribute('stroke-width', '0.55');
       elemento.setAttribute('vector-effect', 'non-scaling-stroke');
@@ -1304,13 +1398,18 @@ actualizarMenuMulti('estado');
   }
 
 
-  function iniciar() {
-    if (document.querySelector('.global-multi')) {
+function iniciar() {
+  if (document.querySelector('.global-multi')) {
     configurarMenusMulti();
     actualizarMenuMulti('region');
     actualizarMenuMulti('pais');
     actualizarMenuMulti('estado');
   }
+
+  const selectorMes = $('globalMes');
+  selectorMes?.addEventListener('change', () => {
+    seleccionarMes(selectorMes.value);
+  });
 
   const botonLimpiar = $('globalLimpiar');
 

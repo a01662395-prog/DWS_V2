@@ -13,7 +13,7 @@
 }
 
 .global-filtros {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
   padding: 12px; margin-bottom: 12px; background: var(--superficie);
   border: 1px solid var(--borde); border-radius: var(--r-lg); box-shadow: var(--sombra-sm);
 }
@@ -21,6 +21,7 @@
   display: grid; gap: 6px; color: var(--texto-med); font-size: 12px; font-weight: 500;
 }
 .global-filtros .campo { width: 100%; }
+.global-filtro-mes { display: grid; gap: 6px; color: var(--texto-med); font-size: 12px; font-weight: 500; }
 .global-filtros .campo:focus {
   outline: none; border-color: var(--femsa-600); box-shadow: var(--anillo);
 }
@@ -39,10 +40,6 @@
 .global-kpi::before {
   position: absolute; inset: 0 0 auto; height: 2px; background: var(--kpi-color, var(--femsa-600)); content: '';
 }
-.global-kpi:nth-child(1),
-.global-kpi:nth-child(2),
-.global-kpi:nth-child(3),
-.global-kpi:nth-child(4) { --kpi-color: var(--femsa-600); }
 .global-kpi span { display: block; color: var(--texto-med); font-size: 12px; font-weight: 500; }
 .global-kpi strong {
   display: block; margin-top: 12px; color: var(--texto); font-family: var(--mono);
@@ -184,8 +181,8 @@
 
 /* Color superior de cada tarjeta */
 .global-kpi:nth-child(1) { --kpi-color: var(--exito); }
-.global-kpi:nth-child(2) { --kpi-color: var(--info); }
-.global-kpi:nth-child(3) { --kpi-color: var(--exito); }
+.global-kpi:nth-child(2) { --kpi-color: var(--exito); }
+.global-kpi:nth-child(3) { --kpi-color: var(--info); }
 .global-kpi:nth-child(4) { --kpi-color: var(--peligro); }
 
 .global-kpi::before {
@@ -214,6 +211,7 @@
   text-align: right;
   color: var(--texto);
 }
+.global-kpi:not(.global-kpi--cobertura) > strong { color: var(--kpi-color); }
 
 /* Descripción debajo del número */
 .global-kpi .global-kpi-descripcion {
@@ -233,8 +231,8 @@
   display: grid;
   place-items: center;
   border-radius: 12px;
-  background: var(--oliva-tinte);
-  border: 1px solid var(--oliva-borde);
+  background: var(--kpi-tinte, var(--femsa-tinte));
+  border: 1px solid var(--kpi-borde, var(--borde));
   color: var(--kpi-color);
 }
 
@@ -269,7 +267,7 @@
   grid-column: auto;
   min-height: 205px;
   border-width: 2px;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+  box-shadow: var(--sombra);
 }
 
 .global-kpi--cobertura > strong {
@@ -386,7 +384,7 @@
   height: 74px;
   place-items: center;
   border-radius: 50%;
-  background: conic-gradient(var(--info) var(--gestion-porcentaje), var(--fondo-alt) 0);
+  background: conic-gradient(var(--gestion-color, var(--info)) var(--gestion-porcentaje), var(--fondo-alt) 0);
   position: relative;
 }
 
@@ -851,6 +849,7 @@
     font-size: 11px;
   }
 }
+
 /* Cumplimiento más compacto */
 
 #globalCumplimientoGrafica {

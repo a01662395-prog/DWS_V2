@@ -11,7 +11,7 @@
 'use strict';
 
 const PALETA = window.CIFRACONTROL_PALETA || Object.freeze({
-  exito: '#198765', peligro: '#DC3545', alerta: '#E5A12D', desconocido: '#9CA3AF', info: '#487DA8', femsa: '#640017'
+  exito: '#198765', peligro: '#DC3545', alerta: '#E5A12D', desconocido: '#9CA3AF', info: '#487DA8', femsa: '#C8102E'
 });
 
 /* ==========================================================================
@@ -280,7 +280,7 @@ async function apiLocal(ruta, params = {}) {
         'protocol_category',
       ]);
 
-      const colores = [PALETA.femsa, PALETA.info, PALETA.exito, PALETA.alerta, PALETA.desconocido];
+      const colores = [PALETA.info, PALETA.exito, PALETA.alerta, PALETA.peligro, PALETA.desconocido];
 
       return {
         disponible: total > 0,
@@ -317,7 +317,7 @@ async function apiLocal(ruta, params = {}) {
             delta: cobertura,
             sufijo: `${protegidos} de ${total} registros`,
             icono: 'escudo',
-            color: PALETA.info,
+            color: PALETA.exito,
             spark: total > 0 ? [0, cobertura] : [0, 0],
           },
           {
@@ -1521,7 +1521,7 @@ function historialRenderEvolucion(tipo) {
       const grupo = grupos.find(item => item.nombre === nombre);
       return grupo ? { x: periodo, y: grupo.protegido / Math.max(1, grupo.total) * 100, etiqueta: historialFecha(carga) || carga.recibidoEn } : null;
     }).filter(Boolean);
-    return { nombre, color: [PALETA.femsa, PALETA.info, PALETA.exito, PALETA.alerta, PALETA.desconocido][indice % 5], puntos };
+    return { nombre, color: [PALETA.info, PALETA.exito, PALETA.alerta, PALETA.peligro, PALETA.desconocido][indice % 5], puntos };
   });
   if (!datos.length || !datos.some(item => item.puntos.length)) {
     contenedor.innerHTML = '<p class="reporte-vacio">Selecciona al menos una categoría con información histórica.</p>';
@@ -3478,20 +3478,6 @@ function reporteDocumentoHTML(tipo, analisis) {
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>CifraControl · ${titulo}</title><style>@page{size:A4 portrait;margin:14mm 12mm 17mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#26344f;font-size:10px;line-height:1.4;margin:0}h1{font-size:21px;margin:0 0 5px;color:#233951}h2,h3{color:#253b55}h3{font-size:13px;margin:0 0 8px}.cabecera{display:flex;justify-content:space-between;border-bottom:2px solid #263c58;padding-bottom:12px;margin-bottom:14px}.eyebrow{font-size:8px;font-weight:700;letter-spacing:1px;color:#667085}.meta{font-size:9px;color:#647084}.confidencial{border:1px solid #a63d46;color:#a63d46;border-radius:4px;padding:5px;font-weight:bold}.reporte-metadatos{display:block;margin:0 0 14px;color:#667085;font-size:9px}.reporte-metadatos span{margin-right:12px}.reporte-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:13px}.reporte-kpi{border:1px solid #e0e5eb;border-radius:4px;padding:8px}.reporte-kpi strong{display:block;font-size:16px}.reporte-kpi span{font-size:8px;color:#687487}.reporte-kpi--riesgo strong{color:#dc2626}.reporte-kpi--bueno strong{color:#16a34a}.reporte-bloques{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.reporte-bloque{border:1px solid #e0e5eb;border-radius:4px;padding:9px;break-inside:avoid}.reporte-bloque--ancho{grid-column:1/-1}.reporte-bloque p{margin:5px 0}.reporte-lista{margin:0;padding-left:15px}.reporte-lista li{margin:4px 0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px}th{background:#eef1f5;color:#27384d;text-align:left}th,td{padding:5px 4px;border-bottom:1px solid #e4e8ed;overflow-wrap:anywhere;vertical-align:top}.reporte-tabla{overflow:visible}.reporte-vacio{color:#667085;font-size:9px}.reporte-prioridad{font-weight:bold}.reporte-prioridad--alta{color:#dc2626}.reporte-prioridad--media{color:#b45309}.reporte-prioridad--baja{color:#15803d}.reporte-grafica-lista{display:grid;gap:8px}.reporte-grafica-fila{display:grid;gap:3px;break-inside:avoid}.reporte-grafica-cabecera{display:flex;justify-content:space-between;gap:10px;color:#526174;font-size:9px}.reporte-grafica-cabecera strong{color:#26344f;font-size:8.5px}.reporte-grafica-pista{height:7px;overflow:hidden;border-radius:5px;background:#eef1f5}.reporte-grafica-barra{display:block;height:100%;min-width:2px;border-radius:5px}.reporte-grafica-barra--bueno,.reporte-grafica-segmento--bueno{background:#16a34a}.reporte-grafica-barra--alerta,.reporte-grafica-segmento--alerta{background:#d97706}.reporte-grafica-barra--riesgo,.reporte-grafica-segmento--riesgo{background:#dc2626}.reporte-grafica-segmento--neutro{background:#a1a1aa}.reporte-grafica-segmentada{display:flex;height:14px;overflow:hidden;border-radius:7px;background:#eef1f5}.reporte-grafica-segmentada>span{min-width:0}.reporte-grafica-leyenda{display:grid;grid-template-columns:repeat(2,1fr);gap:3px 8px;margin-top:5px;color:#526174;font-size:8.5px}.reporte-grafica-leyenda span{display:flex;align-items:center;gap:4px}.reporte-grafica-leyenda i{width:6px;height:6px;border-radius:2px}.reporte-grafica-leyenda b{color:#26344f}.reporte-grafica-insight{margin:7px 0 0;color:#526174;font-size:8.5px}.reporte-grafica-fila small{color:#667085;font-size:8px}.pie{margin-top:16px;border-top:1px solid #d9dfe6;padding-top:7px;color:#667085;font-size:8px}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><header class="cabecera"><div><div class="eyebrow">CIFRACONTROL · FEMSA</div><h1>${reporteEsc(titulo)}</h1><div class="meta">Generado: ${reporteEsc(analisis.fechaGeneracion)} · Fecha de corte: ${reporteEsc(analisis.fechaCorte)} · Equipos: ${analisis.resumen.total.toLocaleString('es-MX')}</div></div><div class="confidencial">CONFIDENCIAL</div></header>${contenido}<footer class="pie">CifraControl · Uso interno · Reporte generado con datos locales y filtros seleccionados</footer></body></html>`;
 }
 
-function aplicarPaletaPDF(html) {
-  const equivalencias = {
-    '#dc2626': PALETA.peligro,
-    '#16a34a': PALETA.exito,
-    '#d97706': PALETA.alerta,
-    '#a1a1aa': PALETA.desconocido,
-    '#a63d46': PALETA.femsa,
-    '#b03a43': PALETA.peligro,
-    '#9b2c39': PALETA.femsa,
-    '#2563eb': PALETA.info
-  };
-  return Object.entries(equivalencias).reduce((documento, [origen, destino]) => documento.replaceAll(origen, destino), html);
-}
-
 function descargarReportePDF(tipo) {
   reporteFiltrar();
   if (!reporteContenido.size) {
@@ -3517,7 +3503,7 @@ function descargarReportePDF(tipo) {
   }
   const analisis = reporteAnalizar(reporteFiltradas);
   ventana.document.open();
-  ventana.document.write(aplicarPaletaPDF(reporteDocumentoHTML(tipo, analisis)));
+  ventana.document.write(reporteDocumentoHTML(tipo, analisis));
   ventana.document.close();
   ventana.focus();
   let impreso = false;
