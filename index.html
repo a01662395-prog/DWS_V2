@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>FEMSA · CifraControl Security &amp; Inventory</title>
 <meta name="description" content="Plataforma corporativa FEMSA de control de cifrado, inventario tecnológico, monitoreo y limpieza de datos.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239B2C39'/><text x='16' y='22' font-family='sans-serif' font-weight='800' font-size='18' fill='%23ffffff' text-anchor='middle'>F</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23640017'/><text x='16' y='22' font-family='sans-serif' font-weight='800' font-size='18' fill='%23ffffff' text-anchor='middle'>F</text></svg>">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="estilos.css?v=2">
-<link rel="stylesheet" href="dashboard-global.css?v=8">
+<link rel="stylesheet" href="estilos.css?v=15">
+<link rel="stylesheet" href="dashboard-global.css?v=15">
 </head>
 <body>
 
@@ -109,9 +109,6 @@
     </nav>
 
     <div class="sidebar__pie">
-      <a class="nav__link" data-ir="visualizacion" href="#/visualizacion">
-        <svg class="ico"><use href="#i-ojo"></use></svg><span class="nav__txt">Visualización</span>
-      </a>
       <a class="nav__link" data-ir="ajustes" href="#/ajustes">
         <svg class="ico"><use href="#i-ajustes"></use></svg><span class="nav__txt">Ajustes</span>
       </a>
@@ -315,6 +312,59 @@
 
   <!-- FILTROS -->
 
+  <!-- FILTROS MULTISELECCIÓN -->
+  <div class="global-filtros">
+    <label class="global-filtro-mes" for="globalMes">
+      Mes
+      <select class="campo" id="globalMes" aria-label="Seleccionar mes del Dashboard">
+        <option value="todos">Todos los meses (acumulado)</option>
+      </select>
+    </label>
+
+    <div class="global-filtro-multi">
+      <label id="globalRegionLabel">Región</label>
+      <div class="global-multi" data-filtro="region">
+        <button type="button" class="global-multi-boton"
+                aria-labelledby="globalRegionLabel"
+                aria-expanded="false">
+          <span class="global-multi-texto">Todas las regiones</span>
+          <span>⌄</span>
+        </button>
+        <div class="global-multi-menu" id="globalRegionOpciones" hidden></div>
+      </div>
+    </div>
+
+    <div class="global-filtro-multi">
+      <label id="globalPaisLabel">País</label>
+      <div class="global-multi" data-filtro="pais">
+        <button type="button" class="global-multi-boton"
+                aria-labelledby="globalPaisLabel"
+                aria-expanded="false">
+          <span class="global-multi-texto">Todos los países</span>
+          <span>⌄</span>
+        </button>
+        <div class="global-multi-menu" id="globalPaisOpciones" hidden></div>
+      </div>
+    </div>
+
+    <div class="global-filtro-multi">
+      <label id="globalEstadoLabel">Estado de cifrado</label>
+      <div class="global-multi" data-filtro="estado">
+        <button type="button" class="global-multi-boton"
+                aria-labelledby="globalEstadoLabel"
+                aria-expanded="false">
+          <span class="global-multi-texto">Todos los estados</span>
+          <span>⌄</span>
+        </button>
+        <div class="global-multi-menu" id="globalEstadoOpciones" hidden>
+          <label><input type="checkbox" value="protegido"> Protegido</label>
+          <label><input type="checkbox" value="parcial"> Parcial</label>
+          <label><input type="checkbox" value="sin_cifrar"> Sin cifrar</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- INDICADORES -->
   
 <div class="global-kpis">
@@ -429,8 +479,8 @@
     <article class="tarjeta global-recencia-tarjeta">
       <header class="tarjeta__cab">
         <div>
-          <h2>Cumplimiento</h2>
-          <p>Estado de cifrado reportado por los equipos</p>
+          <h2>Estado de cumplimiento</h2>
+          <p>Distribución de equipos según su nivel de cumplimiento</p>
         </div>
       </header>
       <div class="tarjeta__cuerpo">
@@ -464,8 +514,8 @@
       <article class="tarjeta global-gestion-tarjeta">
         <header class="tarjeta__cab">
           <div>
-            <h2>Cobertura de gestión</h2>
-            <p>Equipos administrados y conectados a la organización</p>
+            <h2>Gestión de dispositivos</h2>
+            <p>Porcentaje de equipos registrados en MDM y Active Directory</p>
           </div>
         </header>
         <div class="tarjeta__cuerpo" id="globalGestionGrafica"></div>
@@ -475,7 +525,7 @@
         <header class="tarjeta__cab">
           <div>
             <h2>Excepciones y alertas</h2>
-            <p>Equipos con problemas que necesitan revisión.</p>
+            <p>Equipos con problemas que necesitan revisión</p>
           </div>
           <span class="global-criticos-contador" id="globalCriticosConteo">0 alertas</span>
         </header>
@@ -488,7 +538,7 @@
             </div>
             <div id="globalCriticosGrafica"></div>
           </div>
-          <p class="global-criticos-nota">Para ver más información, consulta la pestaña Equipos críticos.</p>
+          <p class="global-criticos-nota">Para ver más información, consulta la pestaña Alertas de cifrado</p>
         </div>
       </article>
 
@@ -535,20 +585,18 @@
       </section>
 
       <!-- ================================================================
-           VISTA 6 · CARGAR EXCEL  (ingesta diferida)
-           Frontend → Express/Core → /uploads → (futuro worker Python) → PostgreSQL
-           Node.js NO abre ni procesa el archivo: sólo lo almacena.
+           VISTA 6 · CARGAR EXCEL (Pipeline de limpieza local en Web Worker)
            ================================================================ -->
       <section class="vista" data-vista="carga" hidden>
         <div class="rejilla-2 rejilla-2--carga">
 
           <div class="modulo" data-modulo="carga">
-            <!-- Panel exclusivo para Administrador: Ingesta de Excel / CSV con Pipeline Python -->
+            <!-- Panel exclusivo para Administrador: Ingesta de Excel / CSV con Web Worker -->
             <article class="tarjeta" id="panelCargaAdmin">
               <header class="tarjeta__cab">
                 <div>
-                  <h2>Ingesta de hojas de cálculo (Exclusivo Admin)</h2>
-                  <p>Procesamiento de datos y almacenamiento en tu base de datos local</p>
+                  <h2>Carga de archivos</h2>
+                  <p>Importa archivos Excel o CSV para actualizar la información del sistema</p>
                 </div>
                 <span class="pastilla pastilla--protegido">ROL: ADMIN</span>
               </header>
@@ -605,7 +653,7 @@
           <div class="modulo" data-modulo="cola">
             <article class="tarjeta">
               <header class="tarjeta__cab">
-                <div><h2>Verificación de Base de Datos</h2><p>Conteo de registros cargados y gráfica en vivo</p></div>
+                <div><h2>Resumen de datos cargados</h2><p>Consulta la cantidad de registros y columnas disponibles en el sistema</p></div>
                 <div style="display:flex;gap:8px">
                   <button class="btn" id="btnVaciarBD" title="Vaciar base de datos local"><svg class="ico"><use href="#i-basura"></use></svg>Vaciar BD</button>
                   <button class="btn" id="btnRefrescarCola" aria-label="Actualizar verificación"><svg class="ico"><use href="#i-refrescar"></use></svg></button>
@@ -627,11 +675,6 @@
           </div>
         </div>
       </section>
-
-      <!-- ================================================================
-           VISTA · VISUALIZACIÓN (en construcción)
-           ================================================================ -->
-      <section class="vista" data-vista="visualizacion" hidden></section>
 
       <!-- ================================================================
            VISTA 7 · AJUSTES
@@ -1019,12 +1062,12 @@
 <!-- Avisos flotantes -->
 <div class="avisos" id="avisos" aria-live="polite" aria-atomic="false"></div>
 
-<script src="security/crypto.js?v=2"></script>
-<script src="security/vault.js?v=3"></script>
-<script src="security/secure-db.js?v=2"></script>
-<script src="db.js?v=7"></script>
-<script src="pipeline.js?v=3"></script>
-<script src="dashboard-global.js?v=11"></script>
-<script src="app.js?v=22"></script>
+<script src="security/crypto.js?v=5"></script>
+<script src="security/vault.js?v=6"></script>
+<script src="security/secure-db.js?v=5"></script>
+<script src="db.js?v=10"></script>
+<script src="pipeline.js?v=6"></script>
+<script src="dashboard-global.js?v=18"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>

@@ -1,11 +1,10 @@
 /* ============================================================================
  *  CifraControl · Motor de Base de Datos Local Cifrada (Zero-Knowledge IndexedDB)
  * ============================================================================
- *  - Todos los datos en disco se almacenan cifrados con AES-GCM-256 usando
- *    la CryptoKey derivada en RAM por Vault (PBKDF2 250,000 iteraciones).
- *  - Si alguien inspecciona DevTools > Application > IndexedDB o roba los
- *    archivos SQLite/LevelDB del navegador en disco, sólo verá ArrayBuffers
- *    cifrados (ciphertext) e IVs de 12 bytes, sin un solo byte de datos en claro.
+ *  - Todos los datos en disco se almacenan cifrados con AES-GCM-256 + AAD usando
+ *    la CryptoKey derivada en RAM por Vault (PBKDF2 600,000 iteraciones).
+ *  - Consolidación inteligente entre lotes: actualiza registros con el mismo
+ *    equipo_id al cargar nuevos cortes mensuales sin inflar los KPIs.
  * ========================================================================== */
 
 'use strict';
@@ -16,6 +15,8 @@ const DB = (() => {
   const STORE_META = '__vault_meta__';
   const STORE_DATOS = 'dataset_actual';
   const STORE_HISTORIAL = 'historial_cargas';
+  const INDICE_KEY = '__indice__';
+  const MAX_AVISOS_ACUMULADOS = 100;
 
   let dbInstance = null;
   let cacheActual = null;
@@ -54,6 +55,71 @@ const DB = (() => {
     vueloActual = null;
   }
 
+  if (typeof Vault !== 'undefined' && typeof Vault.suscribir === 'function') {
+    Vault.suscribir((evento) => {
+      if (evento === 'LOCKED' || evento === 'DATA_UPDATED') {
+        invalidarCacheActual();
+      }
+    });
+  }
+
+  /** Extrae la llave primaria de un equipo/hallazgo si existe, o null si no aplica. */
+  function clavePrimariaFila(fila) {
+    if (!fila || typeof fila !== 'object') return null;
+    const raw = fila.equipo_id ?? fila.finding_id ?? null;
+    if (raw === null || raw === undefined) return null;
+    const limpio = String(raw).trim().toUpperCase();
+    if (!limpio || limpio === 'NO DISPONIBLE' || limpio === 'N/A' || limpio === 'NULL') {
+      return null;
+    }
+    return limpio;
+  }
+
+  /**
+   * Consolida múltiples lotes ordenados cronológicamente (del más antiguo al más reciente).
+   * Si un equipo_id vuelve a aparecer en un lote más reciente (ej. nuevo corte mensual),
+   * prevalece el estado del lote más reciente sin duplicar el equipo en los KPIs,
+   * conservando intactas todas las filas dentro de un mismo lote.
+   */
+  function consolidarFilasDeLotes(lotesDescifrados) {
+    const lotesValidos = lotesDescifrados.filter(
+      (lote) => lote && Array.isArray(lote.filas) && lote.filas.length > 0
+    );
+    if (!lotesValidos.length) return { filas: [], reemplazados: 0 };
+    if (lotesValidos.length === 1) {
+      return { filas: lotesValidos[0].filas.slice(), reemplazados: 0 };
+    }
+
+    // Mapa de cuál es el índice del último lote en que aparece cada clave primaria
+    const ultimoLotePorClave = new Map();
+    for (let idxLote = 0; idxLote < lotesValidos.length; idxLote++) {
+      const filasLote = lotesValidos[idxLote].filas;
+      for (let i = 0; i < filasLote.length; i++) {
+        const pk = clavePrimariaFila(filasLote[i]);
+        if (pk !== null) {
+          ultimoLotePorClave.set(pk, idxLote);
+        }
+      }
+    }
+
+    const filasConsolidadas = [];
+    let reemplazados = 0;
+    for (let idxLote = 0; idxLote < lotesValidos.length; idxLote++) {
+      const filasLote = lotesValidos[idxLote].filas;
+      for (let i = 0; i < filasLote.length; i++) {
+        const fila = filasLote[i];
+        const pk = clavePrimariaFila(fila);
+        if (pk !== null && ultimoLotePorClave.get(pk) !== idxLote) {
+          reemplazados++;
+          continue;
+        }
+        filasConsolidadas.push(fila);
+      }
+    }
+
+    return { filas: filasConsolidadas, reemplazados };
+  }
+
   /** Abre o inicializa el esquema IndexedDB con el almacén de metadatos criptográficos. */
   function abrir() {
     if (dbInstance) return Promise.resolve(dbInstance);
@@ -85,7 +151,6 @@ const DB = (() => {
     });
   }
 
-  /** Verifica si la bóveda está actualmente bloqueada (sin clave en RAM). */
   function estaBloqueada() {
     return !Vault.estaDesbloqueada();
   }
@@ -98,25 +163,21 @@ const DB = (() => {
     return Vault.esAdmin();
   }
 
-  /** Verifica si ya existe una contraseña maestra configurada en esta máquina. */
   async function tieneBovedaConfigurada() {
     const db = await abrir();
     return Vault.existeBoveda(db);
   }
 
-  /** Crea la bóveda con la contraseña maestra y el rol elegidos por el usuario. */
   async function crearBoveda(password, opciones = {}) {
     const db = await abrir();
     return Vault.inicializarBoveda(db, password, opciones);
   }
 
-  /** Desbloquea la bóveda validando la contraseña maestra contra el testigo cifrado. */
   async function desbloquearBoveda(password) {
     const db = await abrir();
     return Vault.desbloquear(db, password);
   }
 
-  /** Obtiene los metadatos públicos de la bóveda (algoritmo, iteraciones, fecha de creación). */
   async function infoCriptografica() {
     const db = await abrir();
     const meta = await Vault.obtenerMetaBoveda(db);
@@ -125,35 +186,36 @@ const DB = (() => {
       desbloqueadaEnRAM: Vault.estaDesbloqueada(),
       rolActivo: Vault.obtenerRol(),
       algoritmo: meta?.algoritmo || 'AES-GCM-256 / PBKDF2-HMAC-SHA256',
-      iteracionesPBKDF2: meta?.iterations || 250000,
+      iteracionesPBKDF2: meta?.iterations || CryptoEngine.PBKDF2_ITERATIONS,
       longitudIV: '12 bytes (96 bits)',
       longitudSalt: '16 bytes (128 bits)',
+      aadActivo: meta?.aadVersion === 1,
       creadoEn: meta?.creadoEn || null,
     };
   }
 
-  const INDICE_KEY = '__indice__';
-
-  function combinarMetas(metaPrevia, metaNueva, totalFilas) {
+  function combinarMetas(metaPrevia, metaNueva, totalFilas, reemplazados = 0) {
     if (!metaPrevia && !metaNueva) return null;
     const colsPrevias = Array.isArray(metaPrevia?.columnas) ? metaPrevia.columnas : [];
     const colsNuevas = Array.isArray(metaNueva?.columnas) ? metaNueva.columnas : [];
     const avisosPrevios = Array.isArray(metaPrevia?.avisos) ? metaPrevia.avisos : [];
     const avisosNuevos = Array.isArray(metaNueva?.avisos) ? metaNueva.avisos : [];
+    const avisosUnicos = Array.from(new Set([...avisosPrevios, ...avisosNuevos])).slice(0, MAX_AVISOS_ACUMULADOS);
     return {
       ...(metaPrevia || {}),
       ...(metaNueva || {}),
       filas: totalFilas,
+      reemplazadosPorActualizacion: reemplazados,
       columnas: metaPrevia ? Array.from(new Set([...colsPrevias, ...colsNuevas])) : colsNuevas,
-      avisos: metaPrevia ? [...avisosPrevios, ...avisosNuevos] : avisosNuevos,
+      avisos: metaPrevia ? avisosUnicos : avisosNuevos.slice(0, MAX_AVISOS_ACUMULADOS),
     };
   }
 
   /**
    * Guarda el resultado limpio CIFRADO con AES-GCM-256 en IndexedDB por lotes.
-   * Si ya existen cargas previas, agrega un nuevo lote sin re-cifrar los anteriores
-   * y conserva absolutamente todas las filas (concatenación pura).
-   * Restringido exclusivamente al rol 'admin'.
+   * Conserva cada lote intacto para el historial y las comparativas mensuales,
+   * y consolida el dataset activo por `equipo_id` (prevalece el corte más reciente).
+   * Restringido al rol 'admin'.
    */
   async function guardarCarga({ filas, meta, registroCola }) {
     if (!Vault.esAdmin()) {
@@ -180,20 +242,29 @@ const DB = (() => {
         }
       }
 
+      const lotesPrevios = tienePrevio
+        ? await Promise.all(indice.lotes.map((id) => SecureDB.getDecrypted(db, STORE_DATOS, id)))
+        : [];
+      const nuevoLoteObj = {
+        filas: nuevasFilas,
+        meta: meta || null,
+        actualizadoEn: new Date().toISOString(),
+      };
+      const { filas: filasConsolidadas, reemplazados } = consolidarFilasDeLotes([
+        ...lotesPrevios,
+        nuevoLoteObj,
+      ]);
+
       const lotes = tienePrevio ? [...indice.lotes, loteId] : [loteId];
-      const totalFilas = (tienePrevio ? (indice.totalFilas || 0) : 0) + nuevasFilas.length;
-      const metaCombinada = combinarMetas(tienePrevio ? indice.meta : null, meta, totalFilas);
-      const ahoraIso = new Date().toISOString();
+      const totalFilas = filasConsolidadas.length;
+      const metaCombinada = combinarMetas(tienePrevio ? indice.meta : null, meta, totalFilas, reemplazados);
+      const ahoraIso = nuevoLoteObj.actualizadoEn;
 
       const escrituras = [
         {
           storeName: STORE_DATOS,
           keyId: loteId,
-          data: {
-            filas: nuevasFilas,
-            meta: meta || null,
-            actualizadoEn: ahoraIso,
-          },
+          data: nuevoLoteObj,
         },
         {
           storeName: STORE_DATOS,
@@ -208,11 +279,13 @@ const DB = (() => {
       ];
 
       if (registroCola && registroCola.id) {
+        const copiaCola = { ...registroCola };
+        delete copiaCola.filas; // Evita duplicar filas en STORE_HISTORIAL; se hidratan desde loteId
         escrituras.push({
           storeName: STORE_HISTORIAL,
           keyId: registroCola.id,
           data: {
-            ...registroCola,
+            ...copiaCola,
             loteId,
             meta: meta || null,
             esSnapshot: true,
@@ -222,20 +295,17 @@ const DB = (() => {
 
       await SecureDB.escribirTransaccionCifrada(db, { escrituras });
 
-      if (cacheActual && Array.isArray(cacheActual.filas)) {
-        const acumuladas = cacheActual.filas.concat(nuevasFilas);
-        cacheActual = {
-          disponible: acumuladas.length > 0,
-          filas: acumuladas,
-          meta: metaCombinada,
-        };
-      } else {
-        invalidarCacheActual();
-      }
+      cacheActual = {
+        disponible: filasConsolidadas.length > 0,
+        filas: filasConsolidadas,
+        meta: metaCombinada,
+      };
+      Vault.publicarEventoPestanas?.('DATA_UPDATED', { origen: 'CARGA' });
 
       return {
         concatenado: tienePrevio,
         filasAgregadas: nuevasFilas.length,
+        reemplazados,
         totalFilas,
       };
     });
@@ -245,8 +315,8 @@ const DB = (() => {
   }
 
   /**
-   * Lee y descifra en RAM el dataset actual desde IndexedDB uniendo todos los lotes en paralelo.
-   * Usa caché en RAM mientras la bóveda esté desbloqueada para evitar descifrar en cada vista/filtro.
+   * Lee y descifra en RAM el dataset actual desde IndexedDB consolidando todos los lotes
+   * (mantiene el registro más reciente por EquipoID sin alterar el historial).
    */
   async function obtenerActual() {
     if (!Vault.estaDesbloqueada()) {
@@ -264,16 +334,12 @@ const DB = (() => {
         const lotesDescifrados = await Promise.all(
           indice.lotes.map((id) => SecureDB.getDecrypted(db, STORE_DATOS, id))
         );
-        const filas = [];
-        for (const lote of lotesDescifrados) {
-          if (lote && Array.isArray(lote.filas) && lote.filas.length) {
-            for (let i = 0; i < lote.filas.length; i++) {
-              filas.push(lote.filas[i]);
-            }
-          }
-        }
+        const { filas, reemplazados } = consolidarFilasDeLotes(lotesDescifrados);
+        const metaFinal = indice.meta
+          ? { ...indice.meta, filas: filas.length, reemplazadosPorActualizacion: reemplazados }
+          : null;
         cacheActual = filas.length
-          ? { disponible: true, filas, meta: indice.meta || null }
+          ? { disponible: true, filas, meta: metaFinal }
           : { disponible: false, filas: [], meta: null };
         return cacheActual;
       }
@@ -353,22 +419,29 @@ const DB = (() => {
   async function asegurarActualEnHistorial(actual) {
     if (!Vault.estaDesbloqueada() || !Vault.esAdmin() || !actual?.filas?.length) return false;
     const historial = await listarHistorial();
+    if (historial.some((item) => item.esSnapshot)) return false;
+
+    const db = await abrir();
+    const indice = await SecureDB.getDecrypted(db, STORE_DATOS, INDICE_KEY);
+    const ultimoLoteId = indice?.lotes?.[indice.lotes.length - 1] || null;
     const procesadoEn = actual.meta?.procesado_en || actual.meta?.procesadoEn || '';
-    const yaExiste = historial.some(item => item.esSnapshot && (
-      (procesadoEn && (item.meta?.procesado_en || item.meta?.procesadoEn) === procesadoEn)
-      || item.id === `hist-actual-${procesadoEn}`
-    ));
-    if (yaExiste) return false;
     const id = `hist-actual-${procesadoEn || Date.now()}`;
-    await guardarHistorial({
+
+    const payload = {
       id,
       archivo: actual.meta?.archivo_origen || 'Carga actual',
       recibidoEn: actual.meta?.procesado_en || new Date().toISOString(),
       fechaCorte: actual.meta?.fecha_corte || actual.meta?.fechaCorte || null,
-      filas: actual.filas,
+      filasTotal: actual.filas.length,
       meta: actual.meta || null,
       status: 'procesado',
-    });
+    };
+    if (ultimoLoteId) {
+      payload.loteId = ultimoLoteId;
+    } else {
+      payload.filas = actual.filas;
+    }
+    await guardarHistorial(payload);
     return true;
   }
 
@@ -379,14 +452,14 @@ const DB = (() => {
       const tx = db.transaction([STORE_DATOS, STORE_HISTORIAL], 'readwrite');
       tx.objectStore(STORE_DATOS).clear();
       tx.objectStore(STORE_HISTORIAL).clear();
-      tx.oncomplete = () => resolve(true);
+      tx.oncomplete = () => {
+        Vault.publicarEventoPestanas?.('DATA_UPDATED', { origen: 'VACIAR' });
+        resolve(true);
+      };
       tx.onerror = () => reject(new Error('No se pudo limpiar la base de datos.'));
     });
   }
 
-  /**
-   * Vacía los datos cargados pero conserva la configuración de la bóveda (contraseña maestra).
-   */
   async function vaciar() {
     if (!Vault.esAdmin()) {
       throw new Error('Acceso denegado: sólo el rol Administrador puede vaciar la base de datos.');
@@ -394,10 +467,6 @@ const DB = (() => {
     return limpiarStoresDatos();
   }
 
-  /**
-   * Restablecimiento destructivo de fábrica (cuando el usuario olvida su contraseña maestra).
-   * Borra toda la bóveda y todos los registros cifrados.
-   */
   async function restablecerFabrica() {
     invalidarCacheActual();
     const db = await abrir();
@@ -414,25 +483,39 @@ const DB = (() => {
 
   /**
    * Exporta el respaldo 100% CIFRADO con AES-GCM-256 usando una contraseña de transporte.
-   * El archivo .enc.json resultante no contiene ni un solo dato en texto plano.
+   * Evita duplicar filas cuando un snapshot histórico ya apunta a un lote exportado.
    */
   async function exportarBackup(passwordTransporte) {
+    const db = await abrir();
     const actual = await obtenerActual();
-    const historial = await listarHistorial({ incluirFilas: true });
+    const indice = await SecureDB.getDecrypted(db, STORE_DATOS, INDICE_KEY);
+    const lotesMap = {};
+    if (indice && Array.isArray(indice.lotes)) {
+      const lotesLeidos = await Promise.all(
+        indice.lotes.map(async (id) => [id, await SecureDB.getDecrypted(db, STORE_DATOS, id)])
+      );
+      for (const [id, l] of lotesLeidos) {
+        if (l && Array.isArray(l.filas)) {
+          lotesMap[id] = l;
+        }
+      }
+    }
+    const historial = await listarHistorial({ incluirFilas: false });
     const objetoPlano = {
-      version: 2,
+      version: 3,
       exportadoEn: new Date().toISOString(),
       app: 'FEMSA CifraControl Zero-Knowledge',
       datos: actual,
+      lotes: Object.keys(lotesMap).length ? lotesMap : null,
       historial,
     };
     return CryptoEngine.cifrarPaqueteTransporte(objetoPlano, passwordTransporte);
   }
 
   /**
-   * Descifra en memoria RAM un paquete .enc.json usando la contraseña de transporte
-   * e inmediatamente lo vuelve a cifrar con la CryptoKey local del usuario en IndexedDB
-   * en una sola transacción atómica (tanto para rol Administrador como Operador).
+   * Descifra en memoria RAM un paquete .enc.json usando la contraseña de transporte,
+   * valida que contenga registros reales antes de tocar la BD e inmediatamente lo
+   * recifra en una sola transacción atómica.
    */
   async function importarBackup(paqueteCifrado, passwordTransporte) {
     if (!Vault.estaDesbloqueada()) {
@@ -442,42 +525,92 @@ const DB = (() => {
     if (!contenido || typeof contenido !== 'object' || !contenido.datos || typeof contenido.datos !== 'object') {
       throw new Error('El paquete descifrado no contiene una estructura válida de CifraControl.');
     }
+
     const filasLimpias = sanitizarFilas(contenido.datos.filas);
+    const lotesImportados = contenido.lotes && typeof contenido.lotes === 'object' && !Array.isArray(contenido.lotes)
+      ? contenido.lotes
+      : null;
+    const tieneLotesValidos = lotesImportados && Object.values(lotesImportados).some(
+      (l) => l && Array.isArray(l.filas) && l.filas.length > 0
+    );
+    const tieneHistorialConFilas = Array.isArray(contenido.historial) && contenido.historial.some(
+      (h) => h && Array.isArray(h.filas) && h.filas.length > 0
+    );
+
+    if (!filasLimpias.length && !tieneLotesValidos && !tieneHistorialConFilas) {
+      throw new Error('El paquete cifrado está vacío (0 registros). Se canceló la importación para proteger tus datos actuales.');
+    }
+
     const db = await abrir();
     const ahoraIso = new Date().toISOString();
     const escrituras = [];
+    const lotesIds = [];
 
-    if (filasLimpias.length) {
-      const loteId = generarIdSeguro('lote-import');
-      escrituras.push(
-        {
+    if (tieneLotesValidos) {
+      for (const [loteId, loteObj] of Object.entries(lotesImportados)) {
+        if (!loteId || CLAVES_PROHIBIDAS.has(loteId) || !loteObj || !Array.isArray(loteObj.filas)) continue;
+        const fLimpias = sanitizarFilas(loteObj.filas);
+        if (!fLimpias.length) continue;
+        lotesIds.push(loteId);
+        escrituras.push({
           storeName: STORE_DATOS,
           keyId: loteId,
           data: {
-            filas: filasLimpias,
-            meta: contenido.datos.meta || null,
-            actualizadoEn: ahoraIso,
+            filas: fLimpias,
+            meta: loteObj.meta || null,
+            actualizadoEn: loteObj.actualizadoEn || ahoraIso,
           },
+        });
+      }
+    } else if (filasLimpias.length) {
+      const loteId = generarIdSeguro('lote-import');
+      lotesIds.push(loteId);
+      escrituras.push({
+        storeName: STORE_DATOS,
+        keyId: loteId,
+        data: {
+          filas: filasLimpias,
+          meta: contenido.datos.meta || null,
+          actualizadoEn: ahoraIso,
         },
-        {
-          storeName: STORE_DATOS,
-          keyId: INDICE_KEY,
-          data: {
-            lotes: [loteId],
-            meta: contenido.datos.meta || null,
-            totalFilas: filasLimpias.length,
-            actualizadoEn: ahoraIso,
-          },
-        }
-      );
+      });
+    }
+
+    if (lotesIds.length) {
+      escrituras.push({
+        storeName: STORE_DATOS,
+        keyId: INDICE_KEY,
+        data: {
+          lotes: lotesIds,
+          meta: contenido.datos.meta || null,
+          totalFilas: filasLimpias.length,
+          actualizadoEn: ahoraIso,
+        },
+      });
     }
 
     if (Array.isArray(contenido.historial)) {
       for (const h of contenido.historial) {
         if (h && typeof h === 'object' && typeof h.id === 'string' && !CLAVES_PROHIBIDAS.has(h.id)) {
           const hCopia = { ...h };
-          if (Array.isArray(hCopia.filas)) {
-            hCopia.filas = sanitizarFilas(hCopia.filas);
+          if (Array.isArray(hCopia.filas) && hCopia.filas.length) {
+            const fHist = sanitizarFilas(hCopia.filas);
+            if (!hCopia.loteId || !lotesIds.includes(hCopia.loteId)) {
+              const histLoteId = hCopia.loteId && !CLAVES_PROHIBIDAS.has(hCopia.loteId)
+                ? hCopia.loteId
+                : `lote-${hCopia.id}`;
+              escrituras.push({
+                storeName: STORE_DATOS,
+                keyId: histLoteId,
+                data: {
+                  filas: fHist,
+                  meta: hCopia.meta || null,
+                  actualizadoEn: hCopia.recibidoEn || ahoraIso,
+                },
+              });
+              hCopia.loteId = histLoteId;
+            }
+            delete hCopia.filas;
           }
           escrituras.push({
             storeName: STORE_HISTORIAL,
@@ -494,6 +627,7 @@ const DB = (() => {
     });
 
     invalidarCacheActual();
+    Vault.publicarEventoPestanas?.('DATA_UPDATED', { origen: 'IMPORT' });
     return filasLimpias.length;
   }
 
@@ -517,12 +651,20 @@ const DB = (() => {
         const crudos = await leerTodosCrudos(db, storeName);
         for (const rec of crudos) {
           if (!rec || !rec.iv || !rec.ciphertext) continue;
-          const plano = await CryptoEngine.descifrarPayload(oldKey, rec.iv, rec.ciphertext);
-          const { iv, ciphertext } = await CryptoEngine.cifrarPayload(newKey, plano);
+          const aadViejo = rec.aadVersion === 1 ? `${storeName}:${rec.id}` : null;
+          const aadNuevo = `${storeName}:${rec.id}`;
+          let plano;
+          try {
+            plano = await CryptoEngine.descifrarPayload(oldKey, rec.iv, rec.ciphertext, aadViejo);
+          } catch {
+            throw new Error(`Fallo de integridad al recifrar el registro ${rec.id} en ${storeName}. Operación abortada.`);
+          }
+          const { iv, ciphertext } = await CryptoEngine.cifrarPayload(newKey, plano, aadNuevo);
           porGuardar[storeName].push({
             ...rec,
             iv,
             ciphertext,
+            aadVersion: 1,
             updatedAt: new Date().toISOString(),
           });
         }
@@ -538,7 +680,7 @@ const DB = (() => {
     });
   }
 
-  return {
+  return Object.freeze({
     abrir,
     estaBloqueada,
     obtenerRol,
@@ -558,5 +700,5 @@ const DB = (() => {
     restablecerFabrica,
     exportarBackup,
     importarBackup,
-  };
+  });
 })();

@@ -1,18 +1,12 @@
 """
-Pipeline de limpieza y estandarización (basado en Initial_EDA.ipynb, partes A y B).
+Pipeline de referencia de limpieza y estandarización (basado en Initial_EDA.ipynb, partes A y B).
 
-Recibe el Excel subido desde el front, aplica la limpieza del EDA y guarda la versión
-limpia (df_ab) como JSON. Cada carga nueva reemplaza a la anterior.
+NOTA: En tiempo de ejecución del dashboard web, este mismo pipeline se ejecuta
+100 % en el navegador dentro del Web Worker `pipeline-worker.js` (SheetJS local).
+Este script Python se mantiene como implementación de referencia y validación offline.
 
-Uso:
+Uso CLI opcional:
     python pipeline/pipeline.py <archivo.xlsx|.xls|.csv> [--out-dir DIR]
-
-Salida (en --out-dir, por defecto ./data):
-    current.json       filas limpias (lista de registros) → backend y dashboards
-    current_meta.json  resumen de la carga (archivo, fecha, filas, flags, avisos)
-
-Por stdout imprime un JSON {ok, filas, columnas, avisos} para que Node lo devuelva al front.
-Si falla, imprime {ok: false, error} y sale con código 1; la versión anterior no se toca.
 """
 
 import argparse

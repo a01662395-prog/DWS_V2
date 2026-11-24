@@ -12,20 +12,76 @@
     alerta: '#E5A12D',
     desconocido: '#9CA3AF',
     info: '#487DA8',
-    femsa: '#982B3B',
+    femsa: '#C8102E',
     neutro: '#E2E5EA'
   });
   window.CIFRACONTROL_PALETA = PALETA;
 
-  function clasificarEstadoFila(f) {
-    const raw = String(f?.estado_de_cifrado || f?.encryption_context || f?.finding_status || '').toLowerCase();
-    if (!raw || raw === 'no disponible' || raw === 'ninguno' || raw.includes('not encrypted') || raw.includes('unencrypted') || raw.includes('sin cifrar')) {
+  const PALETA_MAPA = Object.freeze({
+    alta: '#198765',
+    intermedia: '#E5A12D',
+    critica: '#DC3545',
+    desconocida: '#9CA3AF'
+  });
+
+  function clasificarEstadoDetallado(f, valorDirecto = undefined) {
+    const fuente = valorDirecto !== undefined
+      ? valorDirecto
+      : (f?.estado_de_cifrado ?? f?.encryption_context ?? f?.finding_status ?? '');
+    const raw = String(fuente ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+    const clave = raw.replace(/[^a-z0-9]/g, '');
+
+    if (!clave || ['nodisponible', 'sindato', 'sindatos', 'sininformacion', 'desconocido', 'unknown', 'na', 'null', 'none'].includes(clave)) {
+      return 'desconocido';
+    }
+    if (
+      raw.includes('not encrypted') ||
+      raw.includes('unencrypted') ||
+      raw.includes('sin cifrar') ||
+      clave.includes('notencrypted') ||
+      clave.includes('nocifrado') ||
+      raw === 'ninguno' ||
+      raw === 'false' ||
+      raw === 'no'
+    ) {
       return 'sin_cifrar';
     }
-    if (raw.includes('encrypted') || raw.includes('cifrado') || raw.includes('aes') || raw.includes('tls') || raw.includes('bitlocker') || raw.includes('filevault')) {
+    if (
+      raw.includes('partial') ||
+      raw.includes('parcial') ||
+      raw.includes('in progress') ||
+      raw.includes('en progreso') ||
+      raw.includes('decrypting') ||
+      raw.includes('encrypting')
+    ) {
+      return 'parcial';
+    }
+    if (
+      raw.includes('encrypted') ||
+      raw.includes('cifrado') ||
+      raw.includes('aes') ||
+      raw.includes('tls') ||
+      raw.includes('bitlocker') ||
+      raw.includes('filevault') ||
+      raw === 'true' ||
+      raw === 'si' ||
+      raw === 'yes'
+    ) {
       return 'protegido';
     }
     return 'parcial';
+  }
+
+  function clasificarEstadoFila(f, opciones = {}) {
+    const est = clasificarEstadoDetallado(f, opciones.valorDirecto);
+    if (est === 'desconocido') {
+      return opciones.distinguirDesconocido ? 'desconocido' : 'sin_cifrar';
+    }
+    return est;
   }
   window.CIFRACONTROL_CLASIFICAR_ESTADO = clasificarEstadoFila;
 
@@ -81,6 +137,9 @@
   let mapaUltimoArrastre = 0;
   let filas = [];
   let filasActuales = [];
+  let historialCargas = [];
+  let cargaActual = null;
+  let mesSeleccionado = 'todos';
 
 const filtrosMulti = {
   region: new Set(),
@@ -98,6 +157,136 @@ const opcionesFiltro = {
   ]
 };
 
+const mesesDashboard = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+function claveMes(fecha) {
+  const texto = String(fecha ?? '').trim();
+  const directo = texto.match(/^(\d{4})-(\d{2})/);
+  if (directo) return `${directo[1]}-${directo[2]}`;
+  const fechaNormalizada = new Date(fecha);
+  if (Number.isNaN(fechaNormalizada.getTime())) return '';
+  return `${fechaNormalizada.getFullYear()}-${String(fechaNormalizada.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function mesActual() {
+  return claveMes(new Date());
+}
+
+function fechaCarga(carga) {
+  return carga?.fechaCorte
+    || carga?.meta?.fecha_corte
+    || carga?.meta?.fechaCorte
+    || carga?.recibidoEn
+    || '';
+}
+
+function etiquetaMes(clave) {
+  const [anio, mes] = String(clave).split('-').map(Number);
+  return anio && mes >= 1 && mes <= 12
+    ? `${mesesDashboard[mes - 1]} de ${anio}`
+    : 'Mes sin fecha';
+}
+
+function cargaTieneDatos(carga) {
+  if (Array.isArray(carga?.filas) && carga.filas.length > 0) return true;
+  if (Number(carga?.filasTotal || carga?.total || 0) > 0 && (carga?.loteId || carga?.id)) return true;
+  return false;
+}
+
+function cargasDelMes(cargas, clave) {
+  return cargas.filter(carga => cargaTieneDatos(carga) && claveMes(fechaCarga(carga)) === clave);
+}
+
+async function filasDelMes(cargas, clave) {
+  const coincidentes = cargasDelMes(cargas, clave);
+  if (!coincidentes.length) return [];
+  const combinadas = [];
+  for (let i = 0; i < coincidentes.length; i++) {
+    let lista = coincidentes[i].filas;
+    if ((!Array.isArray(lista) || !lista.length) && coincidentes[i].id && typeof DB.obtenerHistorial === 'function') {
+      const hidratado = await DB.obtenerHistorial(coincidentes[i].id);
+      if (hidratado && Array.isArray(hidratado.filas)) {
+        coincidentes[i].filas = hidratado.filas;
+        lista = hidratado.filas;
+      }
+    }
+    if (Array.isArray(lista)) {
+      for (let j = 0; j < lista.length; j++) {
+        combinadas.push(lista[j]);
+      }
+    }
+  }
+  return combinadas;
+}
+
+function actualizarSelectorMes(cargas) {
+  const selector = $('globalMes');
+  if (!selector) return;
+
+  const clavesConDatos = [...new Set(cargas.filter(cargaTieneDatos).map(fechaCarga).map(claveMes).filter(Boolean))]
+    .sort((a, b) => b.localeCompare(a));
+  const ordenadas = [...clavesConDatos];
+  selector.replaceChildren();
+
+  const opcionTodos = document.createElement('option');
+  opcionTodos.value = 'todos';
+  opcionTodos.textContent = 'Todos los meses (consolidado)';
+  selector.append(opcionTodos);
+
+  ordenadas.forEach(clave => {
+    const opcion = document.createElement('option');
+    opcion.value = clave;
+    opcion.textContent = etiquetaMes(clave);
+    selector.append(opcion);
+  });
+
+  if (mesSeleccionado !== 'todos' && !ordenadas.includes(mesSeleccionado)) {
+    mesSeleccionado = 'todos';
+  }
+  selector.value = mesSeleccionado;
+}
+
+async function seleccionarMes(clave) {
+  mesSeleccionado = clave || 'todos';
+  if (mesSeleccionado === 'todos') {
+    if ((!cargaActual || !Array.isArray(cargaActual.filas) || !cargaActual.filas.length) && typeof DB.obtenerActual === 'function') {
+      const actual = await DB.obtenerActual();
+      if (actual?.filas?.length) {
+        cargaActual = {
+          ...actual,
+          recibidoEn: actual.meta?.procesado_en || actual.meta?.procesadoEn || new Date().toISOString(),
+          fechaCorte: actual.meta?.fecha_corte || actual.meta?.fechaCorte || null
+        };
+      }
+    }
+    filas = cargaActual?.filas || [];
+  } else {
+    const filasHistorial = await filasDelMes(historialCargas, mesSeleccionado);
+    if (filasHistorial.length) {
+      filas = filasHistorial;
+    } else if (cargaActual && claveMes(fechaCarga(cargaActual)) === mesSeleccionado) {
+      filas = cargaActual.filas || [];
+    } else {
+      filas = [];
+    }
+  }
+  filasActuales = filas;
+
+  filtrosMulti.region.clear();
+  filtrosMulti.pais.clear();
+  filtrosMulti.estado.clear();
+  opcionesFiltro.region = [...new Set(filas.map(regionFila).filter(Boolean).map(String))]
+    .sort((a, b) => a.localeCompare(b, 'es'))
+    .map(region => ({ valor: region, texto: region }));
+  actualizarMenuMulti('region');
+  actualizarMenuMulti('estado');
+  llenarPaises();
+  pintar();
+}
+
 function valoresFiltro(tipo) {
   return [...filtrosMulti[tipo]];
 }
@@ -109,14 +298,7 @@ function actualizarMenuMulti(tipo) {
   if (!contenedor) return;
 
   const menu = contenedor.querySelector('.global-multi-menu');
-  const texto = contenedor.querySelector('.global-multi-texto');
   const seleccionados = filtrosMulti[tipo];
-
-  const nombres = {
-    region: 'Todas las regiones',
-    pais: 'Todos los países',
-    estado: 'Todos los estados'
-  };
 
   menu.replaceChildren();
 
@@ -201,6 +383,7 @@ function configurarMenusMulti() {
 }
 
   let iniciando = false;
+  let recargaPendiente = false;
   let iniciado = false;
 
   const nombrePais = fila =>
@@ -332,13 +515,14 @@ function pintarCoberturaGestion(filtradas) {
   const resumen = document.createElement('div');
   resumen.className = 'global-gestion-resumen';
 
-  indicadores.forEach(indicador => {
+  indicadores.forEach((indicador, indice) => {
     const item = document.createElement('div');
     item.className = 'global-gestion-indicador';
 
     const anillo = document.createElement('div');
     anillo.className = 'global-gestion-anillo';
     anillo.style.setProperty('--gestion-porcentaje', `${indicador.valor}%`);
+    anillo.style.setProperty('--gestion-color', indice === 0 ? PALETA.info : PALETA.exito);
     anillo.setAttribute('aria-label', `${indicador.valor.toFixed(1)}% ${indicador.etiqueta}`);
 
     const contenido = document.createElement('div');
@@ -650,10 +834,10 @@ function pintarGraficaCumplimiento(filtradas) {
     const ubicaciones = [...porUbicacion.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
-      .map(([etiqueta, valor]) => ({
+      .map(([etiqueta, valor], indice) => ({
         etiqueta,
         valor,
-        color: PALETA.info
+        color: [PALETA.info, PALETA.exito, PALETA.alerta, PALETA.femsa][indice % 4]
       }));
 
     const subtitulo = $('globalUbicacionSubtitulo');
@@ -859,30 +1043,30 @@ function llenarPaises() {
 }
 
   async function cargar() {
-    if (iniciando) return;
+    if (iniciando) {
+      recargaPendiente = true;
+      return;
+    }
 
     iniciando = true;
 
     try {
       const actual = await DB.obtenerActual();
-      filasActuales = actual.filas || [];
-      filas = filasActuales;
-      const regiones = [
-        ...new Set(
-          filas.map(regionFila).filter(Boolean).map(String)
-        )
-      ].sort((a, b) => a.localeCompare(b, 'es'));
-
-opcionesFiltro.region = regiones.map(region => ({
-  valor: region,
-  texto: region
-}));
-
-actualizarMenuMulti('region');
-actualizarMenuMulti('estado');
-
-      llenarPaises();
-      pintar();
+      cargaActual = actual?.filas?.length
+        ? {
+          ...actual,
+          recibidoEn: actual.meta?.procesado_en || actual.meta?.procesadoEn || new Date().toISOString(),
+          fechaCorte: actual.meta?.fecha_corte || actual.meta?.fechaCorte || null
+        }
+        : null;
+      // Carga perezosa: sólo lee metadatos ligeros del historial al abrir el dashboard;
+      // las filas de un mes específico se descifran bajo demanda en seleccionarMes().
+      historialCargas = typeof DB.listarHistorial === 'function'
+        ? (await DB.listarHistorial({ incluirFilas: false })).filter(cargaTieneDatos)
+        : [];
+      if (!mesSeleccionado) mesSeleccionado = 'todos';
+      actualizarSelectorMes(historialCargas);
+      await seleccionarMes(mesSeleccionado);
 
       if (!iniciado) {
         await crearMapa2D();
@@ -893,13 +1077,15 @@ actualizarMenuMulti('estado');
       }, 100);
 
     } catch (error) {
-      console.error('Dashboard global:', error);
-
       $('globalSeleccion').textContent =
         'No se pudieron cargar los datos de la bóveda';
 
     } finally {
       iniciando = false;
+      if (recargaPendiente) {
+        recargaPendiente = false;
+        cargar();
+      }
     }
   }
 
@@ -952,6 +1138,12 @@ actualizarMenuMulti('estado');
     return PALETA.exito;
   }
 
+  function colorCoberturaMapa(porcentaje) {
+    if (porcentaje < 75) return PALETA_MAPA.critica;
+    if (porcentaje < 85) return PALETA_MAPA.intermedia;
+    return PALETA_MAPA.alta;
+  }
+
   function crearEstadisticasPaises(filasMapa) {
     const estadisticas = new Map();
 
@@ -975,10 +1167,10 @@ actualizarMenuMulti('estado');
 
     leyenda.replaceChildren();
     [
-      ['Menos de 75%', PALETA.peligro],
-      ['75% a 84%', PALETA.alerta],
-      ['85% o más', PALETA.exito],
-      ['Sin información', PALETA.desconocido]
+      ['Menos de 75%', PALETA_MAPA.critica],
+      ['75% a 84%', PALETA_MAPA.intermedia],
+      ['85% o más', PALETA_MAPA.alta],
+      ['Sin información', PALETA_MAPA.desconocida]
     ].forEach(([texto, color]) => {
       const item = document.createElement('span');
       const muestra = document.createElement('i');
@@ -1000,7 +1192,7 @@ actualizarMenuMulti('estado');
 
       if (!estadistica || !estadistica.total) {
         elemento.style.display = '';
-        elemento.setAttribute('fill', PALETA.desconocido);
+        elemento.setAttribute('fill', PALETA_MAPA.desconocida);
         elemento.setAttribute(
           'aria-label',
           `${feature.properties.name}: sin información`
@@ -1011,7 +1203,7 @@ actualizarMenuMulti('estado');
 
       const porcentaje = (estadistica.cifrados / estadistica.total) * 100;
       elemento.style.display = '';
-      elemento.setAttribute('fill', colorCobertura(porcentaje));
+      elemento.setAttribute('fill', colorCoberturaMapa(porcentaje));
       elemento.setAttribute(
         'aria-label',
         `${feature.properties.name}: ${porcentaje.toFixed(1)}% de equipos cifrados`
@@ -1213,19 +1405,30 @@ actualizarMenuMulti('estado');
 
   function iniciar() {
     if (document.querySelector('.global-multi')) {
-    configurarMenusMulti();
-    actualizarMenuMulti('region');
-    actualizarMenuMulti('pais');
-    actualizarMenuMulti('estado');
-  }
+      configurarMenusMulti();
+      actualizarMenuMulti('region');
+      actualizarMenuMulti('pais');
+      actualizarMenuMulti('estado');
+    }
 
-  const botonLimpiar = $('globalLimpiar');
+    const selectorMes = $('globalMes');
+    selectorMes?.addEventListener('change', () => {
+      seleccionarMes(selectorMes.value);
+    });
+
+    const botonLimpiar = $('globalLimpiar');
 
   if (botonLimpiar) {
-    botonLimpiar.addEventListener('click', () => {
+    botonLimpiar.addEventListener('click', async () => {
       filtrosMulti.region.clear();
       filtrosMulti.pais.clear();
       filtrosMulti.estado.clear();
+
+      if (selectorMes && selectorMes.value !== 'todos') {
+        selectorMes.value = 'todos';
+        await seleccionarMes('todos');
+        return;
+      }
 
       llenarPaises();
 

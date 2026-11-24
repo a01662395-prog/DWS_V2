@@ -3,9 +3,12 @@
  * ============================================================================
  *  - Administra el ciclo de vida de la CryptoKey maestra únicamente en RAM.
  *  - Valida el inicio de sesión mediante un Payload Testigo (Canary) cifrado
- *    con AES-GCM, sin almacenar jamás el hash de la contraseña en disco.
- *  - Auto-bloqueo automático por inactividad y al cerrar la pestaña.
- *  - Protección contra fuerza bruta local con retardo exponencial.
+ *    con AES-GCM + AAD, sin almacenar jamás el hash de la contraseña en disco.
+ *  - NOTA DE ARQUITECTURA (Zero-Knowledge Client-Side): Al ser una aplicación
+ *    100 % local sin servidor, la separación de roles (Admin/Operador) es un
+ *    control de flujo operativo sellado en el testigo local y reforzado con
+ *    Object.freeze + PBKDF2-SHA256 (600,000 iteraciones).
+ *  - Sincronización multi-pestaña mediante BroadcastChannel y auto-bloqueo.
  * ========================================================================== */
 
 'use strict';
@@ -13,18 +16,43 @@
 const Vault = (() => {
   const TESTIGO_CANARY = 'FEMSA_ZERO_KNOWLEDGE_CANARY_V1';
   const STORE_META = '__vault_meta__';
-  const SALT_LICENCIA_ADMIN = 'FEMSA_ADMIN_SALT_V1::';
-  const HASH_LICENCIA_ADMIN = 'b935b519622f5f480997a6dded052964a983a9349f819ddbe7f33a2812e1f319';
+  const AAD_META_CONFIG = '__vault_meta__:config';
+  const SALT_LICENCIA_ADMIN_PRE = 'FEMSA_ADMIN_SALT_V1::';
+  const SALT_LICENCIA_ADMIN_KDF = 'FEMSA_ADMIN_KDF_V2_SALT_2026';
+  const VERIFICADOR_LICENCIA_ADMIN_PBKDF2 = '40c84c5e5bab578c4d1c8522ce7b0446314b00fab0e23e2acfd92d9c30db929d';
 
   /** Clave maestra y rol activos: sólo viven en esta clausura privada en memoria RAM. */
   let claveActivaRAM = null;
   let rolActivoRAM = null; // 'admin' | 'operador'
   let timerInactividad = null;
   let inactividadActiva = true;
-  let inactividadMs = 15 * 60 * 1000; // 15 minutos por defecto
+  let inactividadMs = 15 * 60 * 1000;
   let intentosFallidos = 0;
+  let intentosAdminFallidos = 0;
   let desbloqueandoEnCurso = false;
   const suscriptores = new Set();
+  const canalSync = typeof BroadcastChannel !== 'undefined'
+    ? new BroadcastChannel('cifracontrol_vault_sync')
+    : null;
+
+  function publicarEventoPestanas(tipo, detalle = {}) {
+    if (!canalSync) return;
+    try {
+      canalSync.postMessage({ tipo, detalle, ts: Date.now() });
+    } catch { /* noop */ }
+  }
+
+  if (canalSync) {
+    canalSync.onmessage = (e) => {
+      const msg = e?.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.tipo === 'VAULT_LOCKED' && claveActivaRAM !== null) {
+        bloquear(msg.detalle?.razon || 'MULTI_TAB_LOCK', { propagar: false });
+      } else if (msg.tipo === 'DATA_UPDATED') {
+        notificar('DATA_UPDATED', msg.detalle || {});
+      }
+    };
+  }
 
   function estaDesbloqueada() {
     return claveActivaRAM !== null;
@@ -82,21 +110,10 @@ const Vault = (() => {
     };
     eventos.forEach((evt) => window.addEventListener(evt, handler, { passive: true }));
 
-    // Al cerrar o recargar la pestaña, destruimos la referencia a la clave en RAM
+    // Al cerrar o recargar la pestaña, destruimos la clave y el rol en RAM
     window.addEventListener('beforeunload', () => {
       claveActivaRAM = null;
-    });
-  }
-
-  /**
-   * Comprueba si ya existe una bóveda inicializada en IndexedDB.
-   */
-  async function existeBoveda(db) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction([STORE_META], 'readonly');
-      const req = tx.objectStore(STORE_META).get('config');
-      req.onsuccess = () => resolve(Boolean(req.result && req.result.salt && req.result.authTag));
-      req.onerror = () => reject(new Error('No se pudo verificar el estado de la bóveda en IndexedDB.'));
+      rolActivoRAM = null;
     });
   }
 
@@ -113,13 +130,41 @@ const Vault = (() => {
   }
 
   /**
+   * Comprueba si ya existe una bóveda inicializada en IndexedDB.
+   */
+  async function existeBoveda(db) {
+    const meta = await obtenerMetaBoveda(db);
+    return Boolean(meta && meta.salt && meta.authTag);
+  }
+
+  async function verificarClaveAdmin(claveAdminRaw) {
+    if (intentosAdminFallidos > 0) {
+      const esperaMs = Math.min(4000, intentosAdminFallidos * 600);
+      await new Promise((r) => setTimeout(r, esperaMs));
+    }
+    const pinIngresado = String(claveAdminRaw || '').trim().toUpperCase();
+    if (!pinIngresado) {
+      intentosAdminFallidos++;
+      throw new Error('Clave de administrador incorrecta.');
+    }
+    const preHash = await CryptoEngine.hashSHA256Hex(SALT_LICENCIA_ADMIN_PRE + pinIngresado, true);
+    const derivado = await CryptoEngine.derivarVerificadorPBKDF2Hex(
+      preHash,
+      SALT_LICENCIA_ADMIN_KDF,
+      600000
+    );
+    if (!CryptoEngine.compararTiempoConstante(derivado, VERIFICADOR_LICENCIA_ADMIN_PBKDF2)) {
+      intentosAdminFallidos++;
+      throw new Error('Clave de administrador incorrecta.');
+    }
+    intentosAdminFallidos = 0;
+  }
+
+  /**
    * REGISTRO / INICIALIZACIÓN DE BÓVEDA:
-   * Crea un salt aleatorio de 16 bytes, deriva la CryptoKey con PBKDF2 (250k iteraciones),
-   * cifra el payload testigo con un IV único de 12 bytes y persiste { salt, authIv, authTag }.
-   *
-   * REGLA DE SEGURIDAD DE REGISTRO ÚNICO:
-   * Si ya existe una bóveda configurada en IndexedDB, rechaza el registro para impedir
-   * que alguien sobrescriba o vuelva a usar el flujo de "usuario nuevo".
+   * Crea un salt aleatorio de 16 bytes, deriva la CryptoKey con PBKDF2 (600k iteraciones),
+   * cifra el payload testigo con un IV único de 12 bytes + AAD y persiste con `.add()`
+   * atómico para impedir condiciones de carrera entre pestañas.
    */
   async function inicializarBoveda(db, password, opciones = {}) {
     const yaExiste = await existeBoveda(db);
@@ -133,35 +178,40 @@ const Vault = (() => {
 
     const rolSolicitado = opciones.rol === 'admin' ? 'admin' : 'operador';
     if (rolSolicitado === 'admin') {
-      const pinIngresado = String(opciones.claveAdmin || '').trim().toUpperCase();
-      const hashIngresado = await CryptoEngine.hashSHA256Hex(SALT_LICENCIA_ADMIN + pinIngresado);
-      if (hashIngresado !== HASH_LICENCIA_ADMIN) {
-        throw new Error('Clave de administrador incorrecta.');
-      }
+      await verificarClaveAdmin(opciones.claveAdmin);
     }
 
     const salt = CryptoEngine.generarBytesAleatorios(CryptoEngine.SALT_BYTES);
     const key = await CryptoEngine.derivarClaveMaestra(password, salt);
 
-    // El rol queda sellado criptográficamente dentro del payload autenticado AES-GCM-256
     const testigoPayload = {
       canary: TESTIGO_CANARY,
       rol: rolSolicitado,
       createdAt: new Date().toISOString(),
     };
-    const { iv: authIv, ciphertext: authTag } = await CryptoEngine.cifrarPayload(key, testigoPayload);
+    const { iv: authIv, ciphertext: authTag } = await CryptoEngine.cifrarPayload(
+      key,
+      testigoPayload,
+      AAD_META_CONFIG
+    );
 
     await new Promise((resolve, reject) => {
       const tx = db.transaction([STORE_META], 'readwrite');
-      tx.objectStore(STORE_META).put({
+      const store = tx.objectStore(STORE_META);
+      const req = store.add({
         id: 'config',
         salt,
         authIv,
         authTag,
+        aadVersion: 1,
         iterations: CryptoEngine.PBKDF2_ITERATIONS,
         algoritmo: 'AES-GCM-256 / PBKDF2-SHA256',
         creadoEn: testigoPayload.createdAt,
       });
+      req.onerror = (e) => {
+        e.preventDefault();
+        reject(new Error('Ya existe una contraseña maestra configurada en este equipo.'));
+      };
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => reject(new Error('No se pudo guardar la configuración de la bóveda.'));
     });
@@ -174,11 +224,6 @@ const Vault = (() => {
     return true;
   }
 
-  /**
-   * LOGIN / DESBLOQUEO:
-   * Lee el salt de IndexedDB, deriva la clave candidata y verifica si logra descifrar
-   * y autenticar el payload testigo (authTag).
-   */
   async function actualizarEstadoIntentos(db, config, fallos, lockoutUntil) {
     if (!config) return;
     return new Promise((resolve) => {
@@ -226,12 +271,14 @@ const Vault = (() => {
         config.iterations || CryptoEngine.PBKDF2_ITERATIONS
       );
       let rolDescifrado = 'operador';
+      const aad = config.aadVersion === 1 ? AAD_META_CONFIG : null;
 
       try {
         const testigoDescifrado = await CryptoEngine.descifrarPayload(
           candidateKey,
           config.authIv,
-          config.authTag
+          config.authTag,
+          aad
         );
 
         if (!testigoDescifrado || testigoDescifrado.canary !== TESTIGO_CANARY) {
@@ -266,14 +313,17 @@ const Vault = (() => {
 
   /**
    * LOGOUT / AUTO-LOCK:
-   * Destruye la referencia a la CryptoKey en memoria RAM inmediatamente.
+   * Destruye la referencia a la CryptoKey en memoria RAM inmediatamente y sincroniza pestañas.
    */
-  function bloquear(razon = 'MANUAL') {
+  function bloquear(razon = 'MANUAL', { propagar = true } = {}) {
     claveActivaRAM = null;
     rolActivoRAM = null;
     if (timerInactividad) {
       clearTimeout(timerInactividad);
       timerInactividad = null;
+    }
+    if (propagar) {
+      publicarEventoPestanas('VAULT_LOCKED', { razon });
     }
     notificar('LOCKED', { razon });
   }
@@ -289,27 +339,47 @@ const Vault = (() => {
       throw new Error('No hay una bóveda configurada en este equipo.');
     }
 
+    const fallosPersistidos = Math.max(intentosFallidos, Number(config.failedAttempts) || 0);
+    const bloqueoHasta = Number(config.lockoutUntil) || 0;
+    const ahora = Date.now();
+    if (bloqueoHasta > ahora) {
+      const segs = Math.ceil((bloqueoHasta - ahora) / 1000);
+      throw new Error(`Demasiados intentos fallidos. Espera ${segs} s antes de volver a intentar.`);
+    }
+    if (fallosPersistidos > 0) {
+      const esperaMs = Math.min(4000, fallosPersistidos * 450);
+      await new Promise((r) => setTimeout(r, esperaMs));
+    }
+
     const oldKey = await CryptoEngine.derivarClaveMaestra(
       passActual,
       config.salt,
       config.iterations || CryptoEngine.PBKDF2_ITERATIONS
     );
+    const oldAad = config.aadVersion === 1 ? AAD_META_CONFIG : null;
     let testigoDescifrado;
     try {
       testigoDescifrado = await CryptoEngine.descifrarPayload(
         oldKey,
         config.authIv,
-        config.authTag
+        config.authTag,
+        oldAad
       );
       if (!testigoDescifrado || testigoDescifrado.canary !== TESTIGO_CANARY) {
         throw new Error('CANARY_MISMATCH');
       }
     } catch {
+      intentosFallidos = fallosPersistidos + 1;
+      const nuevoLockout = intentosFallidos >= 5
+        ? Date.now() + Math.min(30000, (intentosFallidos - 4) * 3000)
+        : 0;
+      await actualizarEstadoIntentos(db, config, intentosFallidos, nuevoLockout);
       throw new Error('La contraseña actual es incorrecta.');
     }
 
     const newSalt = CryptoEngine.generarBytesAleatorios(CryptoEngine.SALT_BYTES);
-    const newKey = await CryptoEngine.derivarClaveMaestra(passNueva, newSalt);
+    const newIterations = CryptoEngine.PBKDF2_ITERATIONS;
+    const newKey = await CryptoEngine.derivarClaveMaestra(passNueva, newSalt, newIterations);
 
     const rol = testigoDescifrado.rol === 'admin' ? 'admin' : 'operador';
     const nuevoTestigo = {
@@ -318,13 +388,19 @@ const Vault = (() => {
       createdAt: testigoDescifrado.createdAt || config.creadoEn || new Date().toISOString(),
       rotatedAt: new Date().toISOString(),
     };
-    const { iv: newAuthIv, ciphertext: newAuthTag } = await CryptoEngine.cifrarPayload(newKey, nuevoTestigo);
+    const { iv: newAuthIv, ciphertext: newAuthTag } = await CryptoEngine.cifrarPayload(
+      newKey,
+      nuevoTestigo,
+      AAD_META_CONFIG
+    );
     const nuevoConfig = {
       ...config,
       id: 'config',
       salt: newSalt,
       authIv: newAuthIv,
       authTag: newAuthTag,
+      aadVersion: 1,
+      iterations: newIterations,
       failedAttempts: 0,
       lockoutUntil: 0,
     };
@@ -340,9 +416,11 @@ const Vault = (() => {
       });
     }
 
+    intentosFallidos = 0;
     claveActivaRAM = newKey;
     rolActivoRAM = rol;
     reiniciarTimerInactividad();
+    publicarEventoPestanas('DATA_UPDATED', { origen: 'REKEY' });
     return true;
   }
 
@@ -353,13 +431,17 @@ const Vault = (() => {
 
   function notificar(evento, detalle = {}) {
     suscriptores.forEach((fn) => {
-      try { fn(evento, detalle); } catch { /* noop */ }
+      try {
+        fn(evento, detalle);
+      } catch (err) {
+        console.warn('[Vault] Error en suscriptor:', err);
+      }
     });
   }
 
   conectarMonitoreoActividad();
 
-  return {
+  return Object.freeze({
     STORE_META,
     estaDesbloqueada,
     obtenerRol,
@@ -373,5 +455,6 @@ const Vault = (() => {
     configurarInactividad,
     cambiarPassword,
     suscribir,
-  };
+    publicarEventoPestanas,
+  });
 })();

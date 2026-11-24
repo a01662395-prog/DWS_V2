@@ -1,0 +1,12 @@
+.git
+.agents
+.DS_Store
+__pycache__
+*.pyc
+graphify-out
+frontend
+pipeline
+node_modules
+dist
+*.enc.json
+*.md

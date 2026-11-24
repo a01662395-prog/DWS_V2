@@ -10,6 +10,7 @@
 importScripts('vendor/xlsx.full.min.js');
 
 const HEADER_EXCEL = 2;
+const MAX_SCAN_HEADER_ROWS = 10;
 const ETIQUETA_SIN_DATO = 'No disponible';
 const ETIQUETA_SIN_USUARIO = 'No asignado';
 const MAX_FILAS_ARCHIVO = 100000;
@@ -37,7 +38,7 @@ const CAT_B = [
 const PATRON_SIN_DATO = /^\s*(no disponible|desconocido|sin dato|sin informacion|n\/?a|na|null|none|unknown|-)\s*$/i;
 
 function sinAcentos(texto) {
-  return String(texto).normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  return String(texto ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function aSnakeCase(nombre) {
@@ -112,50 +113,101 @@ function bandasNoEntendibles(valores) {
   return Array.from(set).sort();
 }
 
+/**
+ * Decodifica un buffer CSV/TSV quitando BOM UTF-8 y aplicando fallback a Windows-1252 / Latin-1
+ * si el archivo proviene de Excel en español con acentos no-UTF8.
+ */
+function decodificarTextoCsv(buffer) {
+  let texto;
+  try {
+    texto = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    texto = new TextDecoder('windows-1252').decode(buffer);
+  }
+  if (texto.charCodeAt(0) === 0xFEFF) {
+    texto = texto.slice(1);
+  }
+  return texto;
+}
+
+/**
+ * Parser CSV/TSV optimizado por tajadas (slices) para evitar concatenación carácter por carácter.
+ */
 function parseCsvTexto(texto, sep) {
   const filas = [];
   let fila = [];
-  let campo = '';
+  let campoPartes = [];
+  let inicioTramo = 0;
   let enComillas = false;
+  const len = texto.length;
 
-  for (let i = 0; i < texto.length; i++) {
+  for (let i = 0; i < len; i++) {
     const ch = texto[i];
     if (enComillas) {
       if (ch === '"') {
+        if (i > inicioTramo) campoPartes.push(texto.slice(inicioTramo, i));
         if (texto[i + 1] === '"') {
-          campo += '"';
+          campoPartes.push('"');
           i++;
+          inicioTramo = i + 1;
         } else {
           enComillas = false;
+          inicioTramo = i + 1;
         }
-      } else {
-        campo += ch;
       }
     } else if (ch === '"') {
+      if (i > inicioTramo) campoPartes.push(texto.slice(inicioTramo, i));
       enComillas = true;
+      inicioTramo = i + 1;
     } else if (ch === sep) {
-      fila.push(campo);
-      campo = '';
-    } else if (ch === '\r') {
-      if (texto[i + 1] === '\n') i++;
-      fila.push(campo);
+      if (i > inicioTramo) campoPartes.push(texto.slice(inicioTramo, i));
+      fila.push(campoPartes.length === 1 ? campoPartes[0] : campoPartes.join(''));
+      campoPartes = [];
+      inicioTramo = i + 1;
+    } else if (ch === '\r' || ch === '\n') {
+      if (i > inicioTramo) campoPartes.push(texto.slice(inicioTramo, i));
+      fila.push(campoPartes.length === 1 ? campoPartes[0] : campoPartes.join(''));
+      campoPartes = [];
+      if (ch === '\r' && texto[i + 1] === '\n') i++;
       if (fila.some((c) => c !== '')) filas.push(fila);
       fila = [];
-      campo = '';
-    } else if (ch === '\n') {
-      fila.push(campo);
-      if (fila.some((c) => c !== '')) filas.push(fila);
-      fila = [];
-      campo = '';
-    } else {
-      campo += ch;
+      inicioTramo = i + 1;
     }
   }
-  if (campo !== '' || fila.length > 0) {
-    fila.push(campo);
+
+  if (inicioTramo < len) {
+    campoPartes.push(texto.slice(inicioTramo, len));
+  }
+  if (campoPartes.length > 0 || fila.length > 0) {
+    fila.push(campoPartes.length === 1 ? campoPartes[0] : campoPartes.join(''));
     if (fila.some((c) => c !== '')) filas.push(fila);
   }
   return filas;
+}
+
+function detectarFilaEncabezado(matriz) {
+  if (!matriz || !matriz.length) return 0;
+  // Prioridad 1: fila estándar del EDA (índice 2)
+  if (matriz.length > HEADER_EXCEL) {
+    const hdrEstandar = (matriz[HEADER_EXCEL] || []).map((c) => aSnakeCase(esVacio(c) ? '' : c));
+    if (hdrEstandar.includes('equipo_id')) return HEADER_EXCEL;
+  }
+  // Prioridad 2: escanear las primeras N filas buscando columnas clave conocidas
+  const limite = Math.min(matriz.length, MAX_SCAN_HEADER_ROWS);
+  for (let idx = 0; idx < limite; idx++) {
+    const fila = matriz[idx];
+    if (!Array.isArray(fila)) continue;
+    const norm = fila.map((c) => aSnakeCase(esVacio(c) ? '' : c));
+    if (norm.includes('equipo_id') || norm.includes('finding_id') || norm.includes('device_id')) {
+      return idx;
+    }
+  }
+  // Prioridad 3: primera fila no vacía
+  for (let idx = 0; idx < limite; idx++) {
+    const fila = matriz[idx];
+    if (Array.isArray(fila) && fila.some((c) => !esVacio(c))) return idx;
+  }
+  return 0;
 }
 
 function matrizAObjetos(matriz, headerIdx) {
@@ -201,25 +253,20 @@ function leerArchivoBytes(nombreArchivo, buffer) {
     if (!sheetName) throw new Error('El archivo Excel no contiene hojas.');
     const ws = wb.Sheets[sheetName];
     const matriz = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-
-    if (matriz.length > HEADER_EXCEL) {
-      const hdrTry = (matriz[HEADER_EXCEL] || []).map((c) => aSnakeCase(esVacio(c) ? '' : c));
-      if (hdrTry.includes('equipo_id')) {
-        return matrizAObjetos(matriz, HEADER_EXCEL);
-      }
-    }
-    return matrizAObjetos(matriz, 0);
+    const headerIdx = detectarFilaEncabezado(matriz);
+    return matrizAObjetos(matriz, headerIdx);
   }
 
   if (ext === '.csv' || ext === '.tsv') {
-    const texto = new TextDecoder('utf-8').decode(buffer);
+    const texto = decodificarTextoCsv(buffer);
     const firstNewline = texto.search(/\r?\n/);
     const primeraLinea = firstNewline >= 0 ? texto.slice(0, firstNewline) : texto;
     const sep = primeraLinea.includes('\t') && !primeraLinea.includes(',')
       ? '\t'
       : (primeraLinea.includes(';') && !primeraLinea.includes(',') ? ';' : ',');
     const matriz = parseCsvTexto(texto, sep);
-    return matrizAObjetos(matriz, 0);
+    const headerIdx = detectarFilaEncabezado(matriz);
+    return matrizAObjetos(matriz, headerIdx);
   }
 
   throw new Error(`extensión no admitida: ${ext}`);
@@ -256,8 +303,8 @@ function limpiarGenerico(cols, rawRows, avisos) {
     }
     return obj;
   });
-  avisos.push('Archivo procesado con limpieza estándar (esquema flexible detectado).');
-  return { cols, rows: out };
+  avisos.push(`Archivo procesado con esquema flexible (no contiene columna 'equipo_id'; columnas detectadas: ${cols.slice(0, 8).join(', ')}).`);
+  return { cols, rows: out, fechaCorteDetectada: null };
 }
 
 function parseFechaMes(val) {
@@ -266,7 +313,6 @@ function parseFechaMes(val) {
     return Number.isNaN(val.getTime()) ? null : val;
   }
   if (typeof val === 'number' && Number.isFinite(val)) {
-    // Serial de Excel (días desde 1899-12-30)
     const ms = Math.round((val - 25569) * 86400 * 1000);
     const d = new Date(ms);
     return Number.isNaN(d.getTime()) ? null : d;
@@ -294,6 +340,19 @@ function parseFechaMes(val) {
 
 function finDeMesUTC(d) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+}
+
+function extraerFechaCorteNombre(nombreArchivo) {
+  const m = String(nombreArchivo || '').match(/(20\d{2})[-_](0[1-9]|1[0-2])(?:[-_](0[1-9]|[12]\d|3[01]))?/);
+  if (!m) return null;
+  const anio = Number(m[1]);
+  const mes = Number(m[2]);
+  const dia = m[3] ? Number(m[3]) : null;
+  if (dia) {
+    return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+  const fin = finDeMesUTC(new Date(Date.UTC(anio, mes - 1, 1)));
+  return fin.toISOString().slice(0, 10);
 }
 
 function procesarEstandar(rawRows, avisos) {
@@ -548,7 +607,11 @@ function procesarEstandar(rawRows, avisos) {
   }
 
   const columnas = filasFinales.length > 0 ? Object.keys(filasFinales[0]) : [];
-  return { cols: columnas, rows: filasFinales };
+  return {
+    cols: columnas,
+    rows: filasFinales,
+    fechaCorteDetectada: corte ? corte.toISOString().slice(0, 10) : null,
+  };
 }
 
 self.onmessage = (e) => {
@@ -595,6 +658,8 @@ self.onmessage = (e) => {
       }
     }
 
+    const fechaCorte = extraerFechaCorteNombre(nombre) || resultado.fechaCorteDetectada || null;
+
     self.postMessage({
       tipo: 'listo',
       resultado: {
@@ -602,6 +667,7 @@ self.onmessage = (e) => {
         meta: {
           archivo_origen: nombre,
           procesado_en: new Date().toISOString(),
+          fecha_corte: fechaCorte,
           filas: resultado.rows.length,
           columnas: resultado.cols,
           flags,

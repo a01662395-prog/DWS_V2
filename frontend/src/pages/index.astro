@@ -134,9 +134,7 @@ const titulo = "CifraControl | Dashboard";
       let seleccionados = new Set<string>();
 
       async function iniciarMapa() {
-        const respuesta = await fetch(
-          "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"
-        );
+        const respuesta = await fetch("/world.geojson");
 
         if (!respuesta.ok) {
           throw new Error("No se pudo cargar el mapa");
