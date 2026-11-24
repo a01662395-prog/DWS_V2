@@ -300,113 +300,6 @@ function obtenerColumnaSO(fila, nombres) {
   return v !== undefined && v !== null ? String(v).trim() : '';
 }
 
-function nombreSistemaOperativo(fila) {
-  const sistema = obtenerColumnaSO(fila, [
-    'Sistema Operativo',
-    'sistema_operativo',
-    'sistemaOperativo',
-    'so',
-    'os'
-  ]);
-
-  const version = obtenerColumnaSO(fila, [
-    'Versión SO',
-    'version_so',
-    'versionSO',
-    'version_sistema_operativo'
-  ]);
-
-  const so = normalizar(sistema);
-  const ver = normalizar(version);
-
-  if (so.includes('windows')) {
-    if (/windows\s*11|10\.0\.(22000|22621|22631|26100|26200)/.test(ver)) {
-      return 'Windows 11';
-    }
-
-    if (/windows\s*10|10\.0\.(1904[1-5]|1836[2-3]|17763|10240)/.test(ver)) {
-      return 'Windows 10';
-    }
-
-    return 'Windows sin versión identificada';
-  }
-
-  if (so.includes('mac') || so.includes('os x')) return 'macOS';
-  if (so.includes('linux')) return 'Linux';
-
-  return sistema || 'Sin sistema operativo';
-}
-
-function pintarGraficaSO(filtradas) {
-  const contenedor = $('globalSOGrafica');
-  if (!contenedor) return;
-
-  contenedor.replaceChildren();
-
-  const grupos = new Map();
-
-  filtradas.forEach(fila => {
-    const nombre = nombreSistemaOperativo(fila);
-
-    if (!grupos.has(nombre)) {
-      grupos.set(nombre, { total: 0, cifrados: 0 });
-    }
-
-    const grupo = grupos.get(nombre);
-    grupo.total++;
-
-    if (clasificarEstadoFila(fila) === 'protegido') {
-      grupo.cifrados++;
-    }
-  });
-
-  const resultados = [...grupos.entries()]
-    .map(([nombre, datos]) => ({
-      nombre,
-      total: datos.total,
-      porcentaje: datos.total
-        ? datos.cifrados / datos.total * 100
-        : 0
-    }))
-    .sort((a, b) => a.porcentaje - b.porcentaje);
-
-  if (!resultados.length) {
-    contenedor.textContent = 'No hay datos para mostrar.';
-    return;
-  }
-
-  resultados.forEach(item => {
-    const fila = document.createElement('div');
-    fila.className = 'global-so-fila';
-
-    const nombre = document.createElement('span');
-    nombre.className = 'global-so-nombre';
-    nombre.textContent = item.nombre;
-
-    const pista = document.createElement('div');
-    pista.className = 'global-so-pista';
-
-    const barra = document.createElement('div');
-    barra.className = 'global-so-barra';
-    barra.style.width = `${item.porcentaje}%`;
-
-    barra.style.backgroundColor =
-      item.porcentaje < 75 ? PALETA.peligro :
-      item.porcentaje < 85 ? PALETA.alerta :
-      PALETA.exito;
-
-    pista.append(barra);
-
-    const resultado = document.createElement('strong');
-    resultado.className = 'global-so-resultado';
-    resultado.textContent =
-      `${item.porcentaje.toFixed(1)}% · ${item.total.toLocaleString('es-MX')}`;
-
-    fila.append(nombre, pista, resultado);
-    contenedor.append(fila);
-  });
-}
-
 function valorGestion(fila, nombres) {
   const v = buscarValorColumna(fila, nombres);
   return v !== undefined && v !== null ? v : '';
@@ -736,15 +629,22 @@ function pintarGraficaCumplimiento(filtradas) {
   contenedor.append(barra, resumen);
 }
 
-  function actualizarGraficas(filtradas) {
+  function actualizarGraficas(filtradas, conteosPrecalculados = null) {
     const paisesSeleccionados = valoresFiltro('pais');
     const mostrarPaises = paisesSeleccionados.length > 0;
     const porUbicacion = new Map();
+    const conteos = conteosPrecalculados || { protegido: 0, parcial: 0, sin_cifrar: 0 };
+    const calcularConteos = !conteosPrecalculados;
+
     filtradas.forEach(fila => {
       const ubicacion = mostrarPaises
         ? String(nombrePais(fila) || 'Sin país')
         : String(regionFila(fila) || 'Sin región');
       porUbicacion.set(ubicacion, (porUbicacion.get(ubicacion) || 0) + 1);
+      if (calcularConteos) {
+        const est = clasificarEstadoFila(fila);
+        conteos[est] = (conteos[est] || 0) + 1;
+      }
     });
 
     const ubicaciones = [...porUbicacion.entries()]
@@ -769,7 +669,7 @@ function pintarGraficaCumplimiento(filtradas) {
       { etiqueta: 'Sin cifrar', clave: 'sin_cifrar', color: PALETA.peligro }
     ].map(estado => ({
       etiqueta: estado.etiqueta,
-      valor: filtradas.filter(fila => clasificarEstadoFila(fila) === estado.clave).length,
+      valor: conteos[estado.clave] || 0,
       color: estado.color
     })).filter(estado => estado.valor > 0);
 
@@ -843,31 +743,35 @@ function pintarGraficaCumplimiento(filtradas) {
   const paises = valoresFiltro('pais');
   const estados = valoresFiltro('estado');
 
-  const filtradas = filas.filter(fila => {
+  const conteosEstado = { protegido: 0, parcial: 0, sin_cifrar: 0 };
+  const filtradas = [];
+
+  for (let i = 0; i < filas.length; i++) {
+    const fila = filas[i];
     const coincideRegion =
       !regiones.length ||
       regiones.includes(String(regionFila(fila)));
+    if (!coincideRegion) continue;
 
     const coincidePais =
       !paises.length ||
       paises.some(pais =>
         paisClave(nombrePais(fila)) === paisClave(pais)
       );
+    if (!coincidePais) continue;
 
+    const est = clasificarEstadoFila(fila);
     const coincideEstado =
       !estados.length ||
-      estados.includes(clasificarEstadoFila(fila));
+      estados.includes(est);
+    if (!coincideEstado) continue;
 
-    return coincideRegion && coincidePais && coincideEstado;
-  });
+    filtradas.push(fila);
+    conteosEstado[est] = (conteosEstado[est] || 0) + 1;
+  }
 
-    const protegidos = filtradas.filter(
-      fila => clasificarEstadoFila(fila) === 'protegido'
-    ).length;
-
-    const sinCifrar = filtradas.filter(
-      fila => clasificarEstadoFila(fila) === 'sin_cifrar'
-    ).length;
+    const protegidos = conteosEstado.protegido;
+    const sinCifrar = conteosEstado.sin_cifrar;
 
     $('globalTotal').textContent =
       filtradas.length.toLocaleString('es-MX');
@@ -912,7 +816,7 @@ $('globalBarraSinCifrar').style.width =
   [...regiones, ...paises, ...estados].join(' · ') ||
   'Vista global · Todos los países';
 
-    actualizarGraficas(filtradas);
+    actualizarGraficas(filtradas, conteosEstado);
     pintarGraficaCumplimiento(filtradas);
     pintarGraficaSO(filtradas);
     pintarEquiposCriticos(filtradas);

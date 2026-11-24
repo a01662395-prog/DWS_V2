@@ -846,6 +846,8 @@ async function comprobarSalud() {
 
   try {
     const d = await apiLocal('/health');
+    const metricas = await pedirMetricas();
+    actualizarBadgesDesdeMetricas(metricas);
     cajas.forEach((c) => c && (c.dataset.estado = 'ok'));
     if (textoSidebar) textoSidebar.textContent = `Bóveda AES-GCM (${num(d.registrosCifrados)} filas)`;
     if (textoPastilla) textoPastilla.textContent = `AES-GCM-256 · ${num(d.registrosCifrados)} reg.`;
@@ -1786,16 +1788,28 @@ function redibujarGraficos() {
   dibujarSparks();
 }
 
+const resizeObservers = new Map();
+
 function observarResize(canvas, fn) {
   if (typeof ResizeObserver === 'undefined' || !canvas) return;
+  const clave = canvas.id || canvas;
+  const previo = resizeObservers.get(clave);
+  if (previo) previo.disconnect();
+
   let anchoPrevio = canvas.clientWidth;
   const ro = new ResizeObserver(() => {
+    if (!document.body.contains(canvas)) {
+      ro.disconnect();
+      resizeObservers.delete(clave);
+      return;
+    }
     const ancho = canvas.clientWidth;
     if (Math.abs(ancho - anchoPrevio) < 8) return;
     anchoPrevio = ancho;
     fn();
   });
   ro.observe(canvas);
+  resizeObservers.set(clave, ro);
 }
 
 /* ==========================================================================
@@ -1827,8 +1841,10 @@ function pintarProgreso(porcentaje, texto, error = false) {
   progreso.classList.toggle('es-error', error);
 }
 
-async function huellaArchivo(archivo) {
-  const bytes = await archivo.arrayBuffer();
+async function huellaArchivo(archivoOBuffer) {
+  const bytes = archivoOBuffer instanceof ArrayBuffer
+    ? archivoOBuffer
+    : await archivoOBuffer.arrayBuffer();
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -1871,7 +1887,8 @@ async function enviarArchivo(archivo) {
 
   cargaArchivoEnCurso = true;
   try {
-    const huella = await huellaArchivo(archivo);
+    const bufferArchivo = await archivo.arrayBuffer();
+    const huella = await huellaArchivo(bufferArchivo);
     const historialExistente = await DB.listarHistorial();
     const duplicado = historialExistente.find(item => item.huella === huella);
     if (duplicado && !window.confirm(`Este archivo ya fue cargado el ${fechaHora(duplicado.recibidoEn)}. ¿Deseas guardarlo como una nueva versión histórica?`)) {
@@ -1884,7 +1901,7 @@ async function enviarArchivo(archivo) {
 
     const resultado = await Pipeline.procesarArchivo(archivo, (pct, msg) => {
       pintarProgreso(pct, msg);
-    });
+    }, bufferArchivo);
 
     const idUnico = (window.crypto && typeof window.crypto.randomUUID === 'function')
       ? `ing-${window.crypto.randomUUID()}`
@@ -3109,19 +3126,6 @@ function reporteFiltrar() {
   reporteFiltradas = reporteFiltrarFilas(reporteFilas);
 }
 
-function reporteLlenarSelect(id, valores, etiqueta) {
-  const select = reporteEl(id);
-  if (!select) return;
-  const actual = select.value;
-  select.replaceChildren(new Option(etiqueta, ''));
-  [...new Set(valores.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')).forEach(valor => select.add(new Option(valor, valor)));
-  if ([...select.options].some(option => option.value === actual)) select.value = actual;
-}
-
-function actualizarValoresReporte() {
-  reporteActualizarValoresPorColumna();
-}
-
 const reporteColumnasPrincipales = [
   { etiqueta: 'Región', candidatos: ['region', 'región', 'continent', 'continente'] },
   { etiqueta: 'País', candidatos: ['pais', 'país', 'country'] },
@@ -3151,10 +3155,6 @@ function reporteEtiquetaColumna(columna, amigable = true) {
   const configuracion = reporteColumnasPrincipales.find(item => item.candidatos.some(candidato => reporteClave(candidato) === reporteClave(columna)));
   if (configuracion) return configuracion.etiqueta;
   return columna.replaceAll('_', ' ');
-}
-
-function reporteColumnaPrincipal(columna) {
-  return reporteColumnasPrincipales.some(item => item.candidatos.some(candidato => reporteClave(candidato) === reporteClave(columna)));
 }
 
 function reportePoblarColumnas(filas = reporteFilas) {
@@ -3254,15 +3254,6 @@ function reporteGraficaRegiones(analisis) {
   if (!regiones.length) return '<p class="reporte-vacio">No hay regiones con equipos sin cifrar en los filtros seleccionados.</p>';
   const mayor = regiones[0];
   return `<div class="reporte-grafica-lista">${regiones.map(region => `<div class="reporte-grafica-fila"><div class="reporte-grafica-cabecera"><span>${reporteEsc(region.nombre)}</span><strong>${region.sin_cifrar.toLocaleString('es-MX')} equipos sin cifrar</strong></div>${reporteBarraHorizontal(region.sin_cifrar, mayor.sin_cifrar, 'reporte-grafica-barra--riesgo')}<small>${reportePorcentaje(region.sin_cifrar, region.total)} del total regional</small></div>`).join('')}</div><p class="reporte-grafica-insight">${reporteEsc(mayor.nombre)} concentra la mayor cantidad de equipos sin cifrar: ${mayor.sin_cifrar.toLocaleString('es-MX')}.</p>`;
-}
-
-function renderReporteGraficasEjecutivo(analisis) {
-  const bloques = [];
-  if (reporteGraficas.has('estado')) bloques.push(`<section class="reporte-bloque reporte-bloque--ancho"><h3>Estado general de cifrado</h3>${reporteGraficaEstado(analisis)}</section>`);
-  if (reporteGraficas.has('paises')) bloques.push(`<section class="reporte-bloque reporte-bloque--ancho"><h3>Países que requieren atención</h3>${reporteGraficaPaises(analisis)}</section>`);
-  if (reporteGraficas.has('sistemas')) bloques.push(`<section class="reporte-bloque"><h3>Cifrado por sistema operativo</h3>${reporteGraficaSistemas(analisis)}</section>`);
-  if (reporteGraficas.has('regiones')) bloques.push(`<section class="reporte-bloque"><h3>Distribución regional del riesgo</h3>${reporteGraficaRegiones(analisis)}</section>`);
-  return bloques.join('');
 }
 
 function reporteBloqueGestion(analisis) {
@@ -3551,7 +3542,7 @@ async function cargarReportes() {
 function reporteDocumentoHTML(tipo, analisis) {
   const contenido = tipo === 'comparativo' ? renderReporteComparativo(reporteComparacion) : tipo === 'ejecutivo' ? renderReporteEjecutivo(analisis, true) : renderReporteTecnico(analisis, true);
   const titulo = tipo === 'comparativo' ? 'Reporte comparativo' : tipo === 'ejecutivo' ? 'Reporte ejecutivo' : 'Reporte técnico';
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>CifraControl · ${titulo}</title><style>@page{size:A4 portrait;margin:14mm 12mm 17mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#26344f;font-size:10px;line-height:1.4;margin:0}h1{font-size:21px;margin:0 0 5px;color:#233951}h2,h3{color:#253b55}h3{font-size:13px;margin:0 0 8px}.cabecera{display:flex;justify-content:space-between;border-bottom:2px solid #263c58;padding-bottom:12px;margin-bottom:14px}.eyebrow{font-size:8px;font-weight:700;letter-spacing:1px;color:#667085}.meta{font-size:9px;color:#647084}.confidencial{border:1px solid #a63d46;color:#a63d46;border-radius:4px;padding:5px;font-weight:bold}.reporte-metadatos{display:block;margin:0 0 14px;color:#667085;font-size:9px}.reporte-metadatos span{margin-right:12px}.reporte-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:13px}.reporte-kpi{border:1px solid #e0e5eb;border-radius:4px;padding:8px}.reporte-kpi strong{display:block;font-size:16px}.reporte-kpi span{font-size:8px;color:#687487}.reporte-kpi--riesgo strong{color:#dc2626}.reporte-kpi--bueno strong{color:#16a34a}.reporte-bloques{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.reporte-bloque{border:1px solid #e0e5eb;border-radius:4px;padding:9px;break-inside:avoid}.reporte-bloque--ancho{grid-column:1/-1}.reporte-bloque p{margin:5px 0}.reporte-lista{margin:0;padding-left:15px}.reporte-lista li{margin:4px 0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px}th{background:#eef1f5;color:#27384d;text-align:left}th,td{padding:5px 4px;border-bottom:1px solid #e4e8ed;overflow-wrap:anywhere;vertical-align:top}.reporte-tabla{overflow:visible}.reporte-vacio{color:#667085;font-size:9px}.reporte-prioridad{font-weight:bold}.reporte-prioridad--alta{color:#dc2626}.reporte-prioridad--media{color:#b45309}.reporte-prioridad--baja{color:#15803d}.reporte-grafica-lista{display:grid;gap:8px}.reporte-grafica-fila{display:grid;gap:3px;break-inside:avoid}.reporte-grafica-cabecera{display:flex;justify-content:space-between;gap:10px;color:#526174;font-size:9px}.reporte-grafica-cabecera strong{color:#26344f;font-size:8.5px}.reporte-grafica-pista{height:7px;overflow:hidden;border-radius:5px;background:#eef1f5}.reporte-grafica-barra{display:block;height:100%;min-width:2px;border-radius:5px}.reporte-grafica-barra--bueno,.reporte-grafica-segmento--bueno{background:#16a34a}.reporte-grafica-barra--alerta,.reporte-grafica-segmento--alerta{background:#d97706}.reporte-grafica-barra--riesgo,.reporte-grafica-segmento--riesgo{background:#dc2626}.reporte-grafica-segmento--neutro{background:#a1a1aa}.reporte-grafica-segmentada{display:flex;height:14px;overflow:hidden;border-radius:7px;background:#eef1f5}.reporte-grafica-segmentada>span{min-width:0}.reporte-grafica-leyenda{display:grid;grid-template-columns:repeat(2,1fr);gap:3px 8px;margin-top:5px;color:#526174;font-size:8.5px}.reporte-grafica-leyenda span{display:flex;align-items:center;gap:4px}.reporte-grafica-leyenda i{width:6px;height:6px;border-radius:2px}.reporte-grafica-leyenda b{color:#26344f}.reporte-grafica-insight{margin:7px 0 0;color:#526174;font-size:8.5px}.reporte-grafica-fila small{color:#667085;font-size:8px}.pie{margin-top:16px;border-top:1px solid #d9dfe6;padding-top:7px;color:#667085;font-size:8px}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><header class="cabecera"><div><div class="eyebrow">CIFRACONTROL · FEMSA</div><h1>${reporteEsc(titulo)}</h1><div class="meta">Generado: ${reporteEsc(analisis.fechaGeneracion)} · Fecha de corte: ${reporteEsc(analisis.fechaCorte)} · Equipos: ${analisis.resumen.total.toLocaleString('es-MX')}</div></div><div class="confidencial">CONFIDENCIAL</div></header>${contenido}<footer class="pie">CifraControl · Uso interno · Reporte generado con datos locales y filtros seleccionados</footer></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;"><title>CifraControl · ${titulo}</title><style>@page{size:A4 portrait;margin:14mm 12mm 17mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#26344f;font-size:10px;line-height:1.4;margin:0}h1{font-size:21px;margin:0 0 5px;color:#233951}h2,h3{color:#253b55}h3{font-size:13px;margin:0 0 8px}.cabecera{display:flex;justify-content:space-between;border-bottom:2px solid #263c58;padding-bottom:12px;margin-bottom:14px}.eyebrow{font-size:8px;font-weight:700;letter-spacing:1px;color:#667085}.meta{font-size:9px;color:#647084}.confidencial{border:1px solid #a63d46;color:#a63d46;border-radius:4px;padding:5px;font-weight:bold}.reporte-metadatos{display:block;margin:0 0 14px;color:#667085;font-size:9px}.reporte-metadatos span{margin-right:12px}.reporte-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:13px}.reporte-kpi{border:1px solid #e0e5eb;border-radius:4px;padding:8px}.reporte-kpi strong{display:block;font-size:16px}.reporte-kpi span{font-size:8px;color:#687487}.reporte-kpi--riesgo strong{color:#dc2626}.reporte-kpi--bueno strong{color:#16a34a}.reporte-bloques{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.reporte-bloque{border:1px solid #e0e5eb;border-radius:4px;padding:9px;break-inside:avoid}.reporte-bloque--ancho{grid-column:1/-1}.reporte-bloque p{margin:5px 0}.reporte-lista{margin:0;padding-left:15px}.reporte-lista li{margin:4px 0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px}th{background:#eef1f5;color:#27384d;text-align:left}th,td{padding:5px 4px;border-bottom:1px solid #e4e8ed;overflow-wrap:anywhere;vertical-align:top}.reporte-tabla{overflow:visible}.reporte-vacio{color:#667085;font-size:9px}.reporte-prioridad{font-weight:bold}.reporte-prioridad--alta{color:#dc2626}.reporte-prioridad--media{color:#b45309}.reporte-prioridad--baja{color:#15803d}.reporte-grafica-lista{display:grid;gap:8px}.reporte-grafica-fila{display:grid;gap:3px;break-inside:avoid}.reporte-grafica-cabecera{display:flex;justify-content:space-between;gap:10px;color:#526174;font-size:9px}.reporte-grafica-cabecera strong{color:#26344f;font-size:8.5px}.reporte-grafica-pista{height:7px;overflow:hidden;border-radius:5px;background:#eef1f5}.reporte-grafica-barra{display:block;height:100%;min-width:2px;border-radius:5px}.reporte-grafica-barra--bueno,.reporte-grafica-segmento--bueno{background:#16a34a}.reporte-grafica-barra--alerta,.reporte-grafica-segmento--alerta{background:#d97706}.reporte-grafica-barra--riesgo,.reporte-grafica-segmento--riesgo{background:#dc2626}.reporte-grafica-segmento--neutro{background:#a1a1aa}.reporte-grafica-segmentada{display:flex;height:14px;overflow:hidden;border-radius:7px;background:#eef1f5}.reporte-grafica-segmentada>span{min-width:0}.reporte-grafica-leyenda{display:grid;grid-template-columns:repeat(2,1fr);gap:3px 8px;margin-top:5px;color:#526174;font-size:8.5px}.reporte-grafica-leyenda span{display:flex;align-items:center;gap:4px}.reporte-grafica-leyenda i{width:6px;height:6px;border-radius:2px}.reporte-grafica-leyenda b{color:#26344f}.reporte-grafica-insight{margin:7px 0 0;color:#526174;font-size:8.5px}.reporte-grafica-fila small{color:#667085;font-size:8px}.pie{margin-top:16px;border-top:1px solid #d9dfe6;padding-top:7px;color:#667085;font-size:8px}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><header class="cabecera"><div><div class="eyebrow">CIFRACONTROL · FEMSA</div><h1>${reporteEsc(titulo)}</h1><div class="meta">Generado: ${reporteEsc(analisis.fechaGeneracion)} · Fecha de corte: ${reporteEsc(analisis.fechaCorte)} · Equipos: ${analisis.resumen.total.toLocaleString('es-MX')}</div></div><div class="confidencial">CONFIDENCIAL</div></header>${contenido}<footer class="pie">CifraControl · Uso interno · Reporte generado con datos locales y filtros seleccionados</footer></body></html>`;
 }
 
 function aplicarPaletaPDF(html) {
@@ -3591,6 +3582,7 @@ function descargarReportePDF(tipo) {
     alert('Permite las ventanas emergentes para generar el reporte.');
     return;
   }
+  try { ventana.opener = null; } catch { /* noop */ }
   const analisis = reporteAnalizar(reporteFiltradas);
   ventana.document.open();
   ventana.document.write(aplicarPaletaPDF(reporteDocumentoHTML(tipo, analisis)));
