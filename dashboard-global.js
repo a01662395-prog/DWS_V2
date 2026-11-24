@@ -17,6 +17,18 @@
   });
   window.CIFRACONTROL_PALETA = PALETA;
 
+  function clasificarEstadoFila(f) {
+    const raw = String(f?.estado_de_cifrado || f?.encryption_context || f?.finding_status || '').toLowerCase();
+    if (!raw || raw === 'no disponible' || raw === 'ninguno' || raw.includes('not encrypted') || raw.includes('unencrypted') || raw.includes('sin cifrar')) {
+      return 'sin_cifrar';
+    }
+    if (raw.includes('encrypted') || raw.includes('cifrado') || raw.includes('aes') || raw.includes('tls') || raw.includes('bitlocker') || raw.includes('filevault')) {
+      return 'protegido';
+    }
+    return 'parcial';
+  }
+  window.CIFRACONTROL_CLASIFICAR_ESTADO = clasificarEstadoFila;
+
   const colores = [PALETA.femsa, PALETA.info, PALETA.exito, PALETA.alerta, PALETA.desconocido];
 
   const normalizar = valor =>
@@ -229,15 +241,13 @@ function configurarMenusMulti() {
       nombre.textContent = etiqueta;
 
       const cantidad = document.createElement('strong');
-
-const porcentaje = total ? (valor / total * 100).toFixed(1) : '0.0';
-
-cantidad.innerHTML = `
-  ${valor.toLocaleString('es-MX')}
-  <span style="color: #94a3b8; font-size: 12px; font-weight: 400;">
-    (${porcentaje}%)
-  </span>
-`;
+      const porcentaje = total ? (valor / total * 100).toFixed(1) : '0.0';
+      const pctSpan = document.createElement('span');
+      pctSpan.style.color = '#94a3b8';
+      pctSpan.style.fontSize = '12px';
+      pctSpan.style.fontWeight = '400';
+      pctSpan.textContent = ` (${porcentaje}%)`;
+      cantidad.append(document.createTextNode(valor.toLocaleString('es-MX')), pctSpan);
 
       const pista = document.createElement('div');
       pista.className = 'global-barra-pista';
@@ -255,21 +265,39 @@ cantidad.innerHTML = `
   }
 
 
-function obtenerColumnaSO(fila, nombres) {
-  const normalizarClave = texto => String(texto)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+const cacheMapaClaves = new Map();
 
+function buscarValorColumna(fila, nombres) {
+  if (!fila) return undefined;
+  for (let i = 0; i < nombres.length; i++) {
+    const k = nombres[i];
+    if (fila[k] !== undefined && fila[k] !== null) return fila[k];
+  }
   const claves = Object.keys(fila);
-  const encontrada = claves.find(clave =>
-    nombres.some(nombre =>
-      normalizarClave(clave) === normalizarClave(nombre)
-    )
-  );
+  const firma = claves.join('|');
+  let mapa = cacheMapaClaves.get(firma);
+  if (!mapa) {
+    mapa = new Map();
+    for (let i = 0; i < claves.length; i++) {
+      const norm = normalizar(claves[i]).replace(/[^a-z0-9]/g, '');
+      if (!mapa.has(norm)) mapa.set(norm, claves[i]);
+    }
+    if (cacheMapaClaves.size > 32) cacheMapaClaves.clear();
+    cacheMapaClaves.set(firma, mapa);
+  }
+  for (let i = 0; i < nombres.length; i++) {
+    const norm = normalizar(nombres[i]).replace(/[^a-z0-9]/g, '');
+    const real = mapa.get(norm);
+    if (real !== undefined && fila[real] !== undefined && fila[real] !== null) {
+      return fila[real];
+    }
+  }
+  return undefined;
+}
 
-  return encontrada ? String(fila[encontrada] ?? '').trim() : '';
+function obtenerColumnaSO(fila, nombres) {
+  const v = buscarValorColumna(fila, nombres);
+  return v !== undefined && v !== null ? String(v).trim() : '';
 }
 
 function nombreSistemaOperativo(fila) {
@@ -380,11 +408,8 @@ function pintarGraficaSO(filtradas) {
 }
 
 function valorGestion(fila, nombres) {
-  const normalizarClave = texto => normalizar(texto).replace(/[^a-z0-9]/g, '');
-  const clave = Object.keys(fila).find(actual =>
-    nombres.some(nombre => normalizarClave(actual) === normalizarClave(nombre))
-  );
-  return clave ? fila[clave] : '';
+  const v = buscarValorColumna(fila, nombres);
+  return v !== undefined && v !== null ? v : '';
 }
 
 function esDatoVerdadero(valor) {
@@ -438,12 +463,8 @@ function pintarCoberturaGestion(filtradas) {
 }
 
 function valorFilaCritica(fila, nombres) {
-  const normalizarClave = texto => normalizar(texto).replace(/[^a-z0-9]/g, '');
-  const claves = Object.keys(fila);
-  const clave = claves.find(actual =>
-    nombres.some(nombre => normalizarClave(actual) === normalizarClave(nombre))
-  );
-  return clave ? String(fila[clave] ?? '').trim() : '';
+  const v = buscarValorColumna(fila, nombres);
+  return v !== undefined && v !== null ? String(v).trim() : '';
 }
 
 function nombreEquipoCritico(fila) {
@@ -523,24 +544,6 @@ function pintarEquiposCriticos(filtradas) {
     item.append(nombre, detalle, nivel);
     contenedor.append(item);
   });
-}
-
-
-function obtenerColumnaSO(fila, nombres) {
-  const normalizarClave = texto => String(texto)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-
-  const claves = Object.keys(fila);
-  const encontrada = claves.find(clave =>
-    nombres.some(nombre =>
-      normalizarClave(clave) === normalizarClave(nombre)
-    )
-  );
-
-  return encontrada ? String(fila[encontrada] ?? '').trim() : '';
 }
 
 function nombreSistemaOperativo(fila) {

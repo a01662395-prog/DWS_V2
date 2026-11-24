@@ -11,8 +11,18 @@
 
 const CryptoEngine = (() => {
   const PBKDF2_ITERATIONS = 250000;
+  const MIN_PBKDF2_ITERATIONS = 100000;
+  const MAX_PBKDF2_ITERATIONS = 5000000;
   const SALT_BYTES = 16;
   const IV_BYTES = 12;
+
+  function normalizarIteraciones(iteraciones) {
+    const n = Number(iteraciones);
+    if (!Number.isInteger(n) || n < MIN_PBKDF2_ITERATIONS || n > MAX_PBKDF2_ITERATIONS) {
+      return PBKDF2_ITERATIONS;
+    }
+    return n;
+  }
 
   /** Genera un Uint8Array con entropía criptográfica del sistema operativo. */
   function generarBytesAleatorios(tamano) {
@@ -21,14 +31,16 @@ const CryptoEngine = (() => {
     return bytes;
   }
 
-  /** Convierte Uint8Array / ArrayBuffer a Base64 (para exportar/serializar de forma segura). */
+  /** Convierte Uint8Array / ArrayBuffer a Base64 por bloques de 32 KB (sin agotar la pila ni el hilo principal). */
   function aBase64(buffer) {
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-    let binario = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binario += String.fromCharCode(bytes[i]);
+    const CHUNK = 0x8000;
+    const partes = [];
+    for (let i = 0; i < bytes.byteLength; i += CHUNK) {
+      const sub = bytes.subarray(i, i + CHUNK);
+      partes.push(String.fromCharCode.apply(null, sub));
     }
-    return window.btoa(binario);
+    return window.btoa(partes.join(''));
   }
 
   /** Convierte Base64 de vuelta a Uint8Array. */
@@ -45,9 +57,10 @@ const CryptoEngine = (() => {
    * Deriva una CryptoKey AES-GCM de 256 bits a partir de la contraseña del usuario y el salt.
    * La clave resultante tiene extractable = false y sólo vive en memoria RAM.
    */
-  async function derivarClaveMaestra(password, saltBytes) {
+  async function derivarClaveMaestra(password, saltBytes, iteraciones = PBKDF2_ITERATIONS) {
     const encoder = new TextEncoder();
     const passwordBuffer = encoder.encode(String(password));
+    const iteracionesSeguras = normalizarIteraciones(iteraciones);
 
     try {
       const baseKey = await window.crypto.subtle.importKey(
@@ -62,7 +75,7 @@ const CryptoEngine = (() => {
         {
           name: 'PBKDF2',
           salt: saltBytes instanceof Uint8Array ? saltBytes : new Uint8Array(saltBytes),
-          iterations: PBKDF2_ITERATIONS,
+          iterations: iteracionesSeguras,
           hash: 'SHA-256',
         },
         baseKey,
@@ -167,7 +180,11 @@ const CryptoEngine = (() => {
     const ivBytes = deBase64(paquete.iv);
     const cipherBytes = deBase64(paquete.ciphertext);
 
-    const claveTransporte = await derivarClaveMaestra(passwordTransporte, saltBytes);
+    const claveTransporte = await derivarClaveMaestra(
+      passwordTransporte,
+      saltBytes,
+      paquete.iteraciones || PBKDF2_ITERATIONS
+    );
     try {
       return await descifrarPayload(claveTransporte, ivBytes, cipherBytes.buffer);
     } catch {

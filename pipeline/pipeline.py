@@ -113,7 +113,7 @@ def rango_banda(banda):
     b = sin_acentos(str(banda)).lower()
     if banda is pd.NA or b in ("nan", "<na>", sin_acentos(ETIQUETA_SIN_DATO).lower()):
         return (np.nan, np.nan)
-    factor = 12 if "ano" in b else 1
+    factor = 12 if re.search(r"\banos?\b", b) else 1
     if m := re.search(r"(\d+)\s*-\s*(\d+)", b):
         return (int(m[1]) * factor, int(m[2]) * factor)
     if m := re.search(r"(?:>|mas de)\s*(\d+)|(\d+)\s*\+", b):
@@ -307,7 +307,9 @@ def unir(df_a, df_b):
     """A y B salen de las mismas filas del Excel, así que se unen fila a fila.
     Equivale al left join por equipo_id del EDA, pero no falla si hay ids nulos o repetidos."""
     df_ab = pd.concat([df_a, df_b.drop(columns="equipo_id")], axis=1)
-    df_ab["flag_sin_datos_b"] = ~df_ab["equipo_id"].isin(df_b["equipo_id"].dropna())
+    tiene_b = df_b[COLS_B].apply(lambda col: ~(col.isna() | es_sin_dato(col))).any(axis=1)
+    equipos_con_b = df_b.loc[tiene_b, "equipo_id"].dropna()
+    df_ab["flag_sin_datos_b"] = ~df_ab["equipo_id"].isin(equipos_con_b)
     assert len(df_ab) == len(df_a), "la unión cambió el número de filas de A"
     return df_ab
 

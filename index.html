@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>FEMSA · CifraControl Security &amp; Inventory</title>
 <meta name="description" content="Plataforma corporativa FEMSA de control de cifrado, inventario tecnológico, monitoreo y limpieza de datos.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239B2C39'/><text x='16' y='22' font-family='sans-serif' font-weight='800' font-size='18' fill='%23ffffff' text-anchor='middle'>F</text></svg>">
@@ -193,7 +194,7 @@
           <div class="modulo" data-modulo="serie">
             <article class="tarjeta">
               <header class="tarjeta__cab">
-                <div><h2>Gráfica de verificación de carga</h2><p>Registros almacenados en la Base de Datos tras el pipeline de Python</p></div>
+                <div><h2>Gráfica de verificación de carga</h2><p>Registros almacenados en la Base de Datos tras el pipeline de limpieza</p></div>
                 <div class="segmentos" role="group" aria-label="Agrupación">
                   <button class="segmento is-activo" data-rango="30">BD Local</button>
                 </div>
@@ -1018,12 +1019,12 @@
 <!-- Avisos flotantes -->
 <div class="avisos" id="avisos" aria-live="polite" aria-atomic="false"></div>
 
-<script src="security/crypto.js"></script>
-<script src="security/vault.js?v=2"></script>
-<script src="security/secure-db.js"></script>
-<script src="db.js?v=3"></script>
-<script src="pipeline.js"></script>
-<script src="dashboard-global.js?v=10"></script>
-<script src="app.js?v=17"></script>
+<script src="security/crypto.js?v=2"></script>
+<script src="security/vault.js?v=3"></script>
+<script src="security/secure-db.js?v=2"></script>
+<script src="db.js?v=7"></script>
+<script src="pipeline.js?v=3"></script>
+<script src="dashboard-global.js?v=11"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

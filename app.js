@@ -1,9 +1,9 @@
 /* ============================================================================
- *  CifraControl · Lógica del panel 100 % Portable (Cero Dummies + BD Local + Python)
+ *  CifraControl · Lógica del panel 100 % Portable (Cero Dummies + BD Local + Web Worker)
  * ============================================================================
  *  ARQUITECTURA PORTABLE:
  *    - Base de Datos Local en IndexedDB (db.js): inicia limpia con 0 registros.
- *    - Pipeline de Limpieza en Python dentro del navegador (pipeline.js / Pyodide).
+ *    - Pipeline de Limpieza en Web Worker dentro del navegador (pipeline.js / SheetJS).
  *    - Sin datos dummies: todos los KPIs, gráficas y tablas se calculan a partir
  *      de los datos reales que el usuario o su compañero haya subido.
  * ========================================================================== */
@@ -164,7 +164,10 @@ function avisar(titulo, texto, tipo = 'info', ms = 4600) {
 
 /** Normaliza el estado de cifrado de una fila limpia del pipeline (A+B o TSV). */
 function clasificarEstadoFila(f) {
-  const raw = String(f.estado_de_cifrado || f.encryption_context || f.finding_status || '').toLowerCase();
+  if (typeof window.CIFRACONTROL_CLASIFICAR_ESTADO === 'function') {
+    return window.CIFRACONTROL_CLASIFICAR_ESTADO(f);
+  }
+  const raw = String(f?.estado_de_cifrado || f?.encryption_context || f?.finding_status || '').toLowerCase();
   if (!raw || raw === 'no disponible' || raw === 'ninguno' || raw.includes('not encrypted') || raw.includes('unencrypted') || raw.includes('sin cifrar')) {
     return 'sin_cifrar';
   }
@@ -172,6 +175,28 @@ function clasificarEstadoFila(f) {
     return 'protegido';
   }
   return 'parcial';
+}
+
+const cacheConsultas = {
+  filasRef: null,
+  metaRef: null,
+  inventarioMapeado: null,
+  tiposDisponibles: null,
+  estadosDisponibles: null,
+  pendientes: 0,
+  excepcionesLista: null,
+  excepcionesConteo: null,
+};
+
+function invalidarCacheConsultas() {
+  cacheConsultas.filasRef = null;
+  cacheConsultas.metaRef = null;
+  cacheConsultas.inventarioMapeado = null;
+  cacheConsultas.tiposDisponibles = null;
+  cacheConsultas.estadosDisponibles = null;
+  cacheConsultas.pendientes = 0;
+  cacheConsultas.excepcionesLista = null;
+  cacheConsultas.excepcionesConteo = null;
 }
 
 /** Obtiene conteos de una columna para armar gráficas reales desde la BD. */
@@ -210,7 +235,7 @@ async function apiLocal(ruta, params = {}) {
       const cripto = await DB.infoCriptografica();
       return {
         status: 'ok',
-        modo: 'Zero-Knowledge Vault (Web Crypto API + IndexedDB + Pyodide)',
+        modo: 'Zero-Knowledge Vault (Web Crypto API + IndexedDB + Web Worker)',
         cifrado: cripto.algoritmo,
         iteracionesPBKDF2: cripto.iteracionesPBKDF2,
         bovedaDesbloqueadaEnRAM: cripto.desbloqueadaEnRAM,
@@ -362,31 +387,44 @@ async function apiLocal(ruta, params = {}) {
     }
 
     case '/dashboard/inventario': {
-      const mapeadas = filas.map((f, idx) => {
-        const id = f.equipo_id || f.finding_id || `REG-${idx + 1}`;
-        const nombre = f.equipo_id || f.server_id || f.usuario_id || `Registro ${idx + 1}`;
-        const tipo = f.familia_so || f.sistema_operativo || f.functional_category || f.clase_de_equipo || 'Activo';
-        const cifrado = f.tecnologia_de_cifrado_state || f.estado_de_cifrado || f.encryption_context || 'No disponible';
-        const est = clasificarEstadoFila(f);
-        const ubicacion = [f.pais, f.region, f.port_category].filter((x) => x && x !== 'No disponible').join(' / ') || 'No disponible';
-        const responsable = f.usuario_id || f.fuente_de_datos || 'No asignado';
-        const ultimoAnalisis = f.mes_ultimo_logon || f.last_seen_band || (meta ? meta.procesado_en.slice(0, 50) : '—');
-        return {
-          id: String(id),
-          nombre: String(nombre),
-          tipo: String(tipo),
-          cifrado: String(cifrado),
-          estado: est,
-          ubicacion: String(ubicacion),
-          responsable: String(responsable),
-          bytesCifrados: Number(f.n_campos_sin_dato ?? 0),
-          ultimoAnalisis: String(ultimoAnalisis),
-          iniciales: String(nombre).replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || 'EQ',
-        };
-      });
+      if (cacheConsultas.filasRef !== filas || cacheConsultas.metaRef !== meta || !cacheConsultas.inventarioMapeado) {
+        const fechaFallback = meta?.procesado_en ? String(meta.procesado_en).slice(0, 50) : '—';
+        const mapeadas = filas.map((f, idx) => {
+          const id = String(f.equipo_id || f.finding_id || `REG-${idx + 1}`);
+          const nombre = String(f.equipo_id || f.server_id || f.usuario_id || `Registro ${idx + 1}`);
+          const tipo = String(f.familia_so || f.sistema_operativo || f.functional_category || f.clase_de_equipo || 'Activo');
+          const cifrado = String(f.tecnologia_de_cifrado_state || f.estado_de_cifrado || f.encryption_context || 'No disponible');
+          const est = clasificarEstadoFila(f);
+          const ubicacion = String([f.pais, f.region, f.port_category].filter((x) => x && x !== 'No disponible').join(' / ') || 'No disponible');
+          const responsable = String(f.usuario_id || f.fuente_de_datos || 'No asignado');
+          const ultimoAnalisis = String(f.mes_ultimo_logon || f.last_seen_band || fechaFallback);
+          return {
+            id,
+            nombre,
+            tipo,
+            cifrado,
+            estado: est,
+            ubicacion,
+            responsable,
+            bytesCifrados: Number(f.n_campos_sin_dato ?? 0),
+            ultimoAnalisis,
+            iniciales: nombre.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || 'EQ',
+            _busqueda: `${id} ${nombre} ${tipo} ${cifrado} ${ubicacion} ${responsable}`.toLowerCase(),
+          };
+        });
+        cacheConsultas.filasRef = filas;
+        cacheConsultas.metaRef = meta;
+        cacheConsultas.inventarioMapeado = mapeadas;
+        cacheConsultas.tiposDisponibles = [...new Set(mapeadas.map((m) => m.tipo))].sort();
+        cacheConsultas.estadosDisponibles = [...new Set(mapeadas.map((m) => m.estado))].sort();
+        cacheConsultas.pendientes = mapeadas.filter((m) => m.estado !== 'protegido').length;
+        cacheConsultas.excepcionesLista = null;
+        cacheConsultas.excepcionesConteo = null;
+      }
 
-      const tiposDisponibles = [...new Set(mapeadas.map((m) => m.tipo))].sort();
-      const estadosDisponibles = [...new Set(mapeadas.map((m) => m.estado))].sort();
+      const mapeadas = cacheConsultas.inventarioMapeado;
+      const tiposDisponibles = cacheConsultas.tiposDisponibles;
+      const estadosDisponibles = cacheConsultas.estadosDisponibles;
 
       const estadosSeleccionados = Array.isArray(params.estado)
         ? params.estado
@@ -399,10 +437,7 @@ async function apiLocal(ruta, params = {}) {
       let filtradas = mapeadas.filter((m) => {
         if (estadosSeleccionados.length && !estadosSeleccionados.includes(m.estado)) return false;
         if (tiposSeleccionados.length && !tiposSeleccionados.includes(m.tipo)) return false;
-        if (q) {
-          const texto = `${m.id} ${m.nombre} ${m.tipo} ${m.cifrado} ${m.ubicacion} ${m.responsable}`.toLowerCase();
-          if (!texto.includes(q)) return false;
-        }
+        if (q && !m._busqueda.includes(q)) return false;
         return true;
       });
 
@@ -429,7 +464,7 @@ async function apiLocal(ruta, params = {}) {
           hasta: Math.min(inicio + pageSize, filtradas.length),
         },
         resumen: {
-          pendientes: mapeadas.filter((m) => m.estado !== 'protegido').length,
+          pendientes: cacheConsultas.pendientes,
         },
       };
     }
@@ -484,12 +519,12 @@ async function apiLocal(ruta, params = {}) {
             hostname: 'Protege y cifra tu información con tu contraseña.',
           },
           {
-            servicio: 'Motor Python',
+            servicio: 'Motor Pipeline (Worker)',
             estado: 'operativo',
             uptime: 100,
             latencia: 4,
             intentos: 0,
-            hostname: 'Procesa y limpia los archivos Excel que subes al panel.',
+            hostname: 'Procesa y limpia los archivos Excel/CSV en segundo plano sin bloquear la interfaz.',
           },
         ],
       };
@@ -499,69 +534,78 @@ async function apiLocal(ruta, params = {}) {
       if (!total) {
         return { filas: [], conteo: { critica: 0, alta: 0, media: 0, baja: 0 } };
       }
-      const listaExc = [];
-      filas.forEach((f, idx) => {
-        const idEq = f.equipo_id || f.finding_id || `FILA-${idx + 1}`;
-        const resp = f.usuario_id || f.server_id || 'No asignado';
-        const numeroSerie = numeroSerieFila(f);
-        if (f.flag_compliant_sin_cifrar) {
-          listaExc.push({
-            id: `FLAG-${idx + 1}`,
-            activo: idEq,
-            tipo: 'Marcado como Compliant pero sin cifrar (Not encrypted)',
-            severidad: 'critica',
-            estado: 'abierta',
-            responsable: resp,
-            numeroSerie,
-            detectada: meta?.procesado_en || new Date().toISOString(),
-          });
-        }
-        if (f.flag_banda_recencia_incoherente) {
-          listaExc.push({
-            id: `REC-${idx + 1}`,
-            activo: idEq,
-            tipo: 'Incoherencia entre mes_ultimo_logon y banda_recencia',
-            severidad: 'alta',
-            estado: 'en_revision',
-            responsable: resp,
-            numeroSerie,
-            detectada: meta?.procesado_en || new Date().toISOString(),
-          });
-        }
-        if (f.flag_banda_antiguedad_incoherente) {
-          listaExc.push({
-            id: `ANT-${idx + 1}`,
-            activo: idEq,
-            tipo: 'Incoherencia entre antiguedad_meses y banda_antiguedad',
-            severidad: 'media',
-            estado: 'en_revision',
-            responsable: resp,
-            numeroSerie,
-            detectada: meta?.procesado_en || new Date().toISOString(),
-          });
-        }
-        if (f.severity) {
-          const sevLower = String(f.severity).toLowerCase();
-          const sevMap = sevLower.includes('crit') ? 'critica' : sevLower.includes('alt') ? 'alta' : sevLower.includes('med') ? 'media' : 'baja';
-          listaExc.push({
-            id: String(f.finding_id || `F-${idx + 1}`),
-            activo: String(f.server_id || idEq),
-            tipo: `${f.vulnerability_type_id || 'Hallazgo'} · ${f.functional_category || ''}`,
-            severidad: sevMap,
-            estado: 'abierta',
-            responsable: String(f.encryption_context || 'Equipo'),
-            numeroSerie,
-            detectada: meta?.procesado_en || new Date().toISOString(),
-          });
-        }
-      });
+      if (cacheConsultas.filasRef !== filas || cacheConsultas.metaRef !== meta || !cacheConsultas.excepcionesLista) {
+        const listaExc = [];
+        const detectadaIso = meta?.procesado_en || new Date().toISOString();
+        filas.forEach((f, idx) => {
+          const idEq = f.equipo_id || f.finding_id || `FILA-${idx + 1}`;
+          const resp = f.usuario_id || f.server_id || 'No asignado';
+          const numeroSerie = numeroSerieFila(f);
+          if (f.flag_compliant_sin_cifrar) {
+            listaExc.push({
+              id: `FLAG-${idx + 1}`,
+              activo: idEq,
+              tipo: 'Marcado como Compliant pero sin cifrar (Not encrypted)',
+              severidad: 'critica',
+              estado: 'abierta',
+              responsable: resp,
+              numeroSerie,
+              detectada: detectadaIso,
+            });
+          }
+          if (f.flag_banda_recencia_incoherente) {
+            listaExc.push({
+              id: `REC-${idx + 1}`,
+              activo: idEq,
+              tipo: 'Incoherencia entre mes_ultimo_logon y banda_recencia',
+              severidad: 'alta',
+              estado: 'en_revision',
+              responsable: resp,
+              numeroSerie,
+              detectada: detectadaIso,
+            });
+          }
+          if (f.flag_banda_antiguedad_incoherente) {
+            listaExc.push({
+              id: `ANT-${idx + 1}`,
+              activo: idEq,
+              tipo: 'Incoherencia entre antiguedad_meses y banda_antiguedad',
+              severidad: 'media',
+              estado: 'en_revision',
+              responsable: resp,
+              numeroSerie,
+              detectada: detectadaIso,
+            });
+          }
+          if (f.severity) {
+            const sevLower = String(f.severity).toLowerCase();
+            const sevMap = sevLower.includes('crit') ? 'critica' : sevLower.includes('alt') ? 'alta' : sevLower.includes('med') ? 'media' : 'baja';
+            listaExc.push({
+              id: String(f.finding_id || `F-${idx + 1}`),
+              activo: String(f.server_id || idEq),
+              tipo: `${f.vulnerability_type_id || 'Hallazgo'} · ${f.functional_category || ''}`,
+              severidad: sevMap,
+              estado: 'abierta',
+              responsable: String(f.encryption_context || 'Equipo'),
+              numeroSerie,
+              detectada: detectadaIso,
+            });
+          }
+        });
 
-      const conteo = {
-        critica: listaExc.filter((e) => e.severidad === 'critica').length,
-        alta: listaExc.filter((e) => e.severidad === 'alta').length,
-        media: listaExc.filter((e) => e.severidad === 'media').length,
-        baja: listaExc.filter((e) => e.severidad === 'baja').length,
-      };
+        cacheConsultas.filasRef = filas;
+        cacheConsultas.metaRef = meta;
+        cacheConsultas.excepcionesLista = listaExc;
+        cacheConsultas.excepcionesConteo = {
+          critica: listaExc.filter((e) => e.severidad === 'critica').length,
+          alta: listaExc.filter((e) => e.severidad === 'alta').length,
+          media: listaExc.filter((e) => e.severidad === 'media').length,
+          baja: listaExc.filter((e) => e.severidad === 'baja').length,
+        };
+      }
+
+      const listaExc = cacheConsultas.excepcionesLista;
+      const conteo = cacheConsultas.excepcionesConteo;
 
       const sevFiltro = params.severidad || '';
       const serieFiltro = String(params.serie || '').trim().toLowerCase();
@@ -673,6 +717,7 @@ function actualizarBadgesDesdeMetricas(d) {
 /** Refresca absolutamente todos los módulos tras cargar o vaciar la base de datos. */
 function refrescarTodo() {
   estado.cache = {};
+  invalidarCacheConsultas();
   if (estado.vista === 'dashboard') window.CifraGlobo?.cargar();
   if (estado.vista === 'reportes') cargarReportes();
   if (estado.vista === 'historial') cargarHistorial();
@@ -882,7 +927,7 @@ function pintarSerie(d) {
     cont.innerHTML = `
       <div class="vacio" style="padding:36px 20px">
         <strong>Base de Datos Local vacía (0 registros)</strong>
-        <p style="margin:8px 0 16px">No hay datos dummies cargados. Sube un archivo Excel (<code>.xlsx</code>, <code>.xls</code>) o CSV/TSV para que pase por el pipeline de limpieza de Python y ver aquí la gráfica con los datos reales.</p>
+        <p style="margin:8px 0 16px">No hay datos dummies cargados. Sube un archivo Excel (<code>.xlsx</code>, <code>.xls</code>) o CSV/TSV para que pase por el pipeline de limpieza local y ver aquí la gráfica con los datos reales.</p>
         <button type="button" class="btn btn--primario" id="btnIrACargaResumen">${icono('subir')}Ir a Cargar Excel / CSV</button>
       </div>`;
     const btn = document.getElementById('btnIrACargaResumen');
@@ -1242,7 +1287,7 @@ function pintarExcepciones(d) {
       ? 'No se encontraron alertas para este número de serie'
       : '0 excepciones registradas';
     cont.innerHTML = `<div class="vacio"><strong>${mensaje}</strong>
-      Cuando cargues un archivo, aquí aparecerán las filas marcadas por los flags de incoherencia del pipeline de Python.</div>`;
+      Cuando cargues un archivo, aquí aparecerán las filas marcadas por los flags de incoherencia del pipeline de limpieza.</div>`;
     setBadge('excepciones', 0);
     actualizarControlesBusquedaExcepciones();
     return;
@@ -1263,7 +1308,7 @@ function pintarExcepciones(d) {
     <div class="tabla-marco">
       <table class="tabla">
         <thead><tr>
-          <th>ID</th><th>Equipo / Activo</th><th>Regla del Pipeline Python</th><th>Severidad</th><th>Usuario / Contexto</th>
+          <th>ID</th><th>Equipo / Activo</th><th>Regla del Pipeline</th><th>Severidad</th><th>Usuario / Contexto</th>
         </tr></thead>
         <tbody>
           ${d.filas.map((f) => {
@@ -1307,7 +1352,7 @@ function pintarCola(d) {
     : `
       <div class="vacio" style="margin-bottom:16px">
         <strong>0 datos en la Base de Datos Local</strong>
-        Arrastra tu archivo Excel o CSV en el recuadro de la izquierda para limpiarlo con Python y cargarlo a la base de datos.
+        Arrastra tu archivo Excel o CSV en el recuadro de la izquierda para limpiarlo y cargarlo a la base de datos.
       </div>
     `;
 
@@ -1576,7 +1621,7 @@ function mostrarHistorialDetalle(id) {
 async function cargarHistorial() {
   const actual = await DB.obtenerActual();
   await DB.asegurarActualEnHistorial(actual);
-  historialCargas = (await DB.listarHistorial()).map(historialSnapshot);
+  historialCargas = (await DB.listarHistorial({ incluirFilas: true })).map(historialSnapshot);
   pintarHistorial();
   pintarHistorialTendencia();
 }
@@ -1801,7 +1846,13 @@ function resumenSnapshot(filas, meta) {
   };
 }
 
+let cargaArchivoEnCurso = false;
+
 async function enviarArchivo(archivo) {
+  if (cargaArchivoEnCurso) {
+    avisar('Carga en progreso', 'Espera a que termine de procesarse el archivo actual.', 'alerta');
+    return;
+  }
   if (!DB.esAdmin()) {
     avisar(
       'Privilegios insuficientes',
@@ -1818,24 +1869,29 @@ async function enviarArchivo(archivo) {
     return;
   }
 
-  const huella = await huellaArchivo(archivo);
-  const historialExistente = await DB.listarHistorial();
-  const duplicado = historialExistente.find(item => item.huella === huella);
-  if (duplicado && !window.confirm(`Este archivo ya fue cargado el ${fechaHora(duplicado.recibidoEn)}. ¿Deseas guardarlo como una nueva versión histórica?`)) {
-    return;
-  }
-
-  document.getElementById('confirmacion').hidden = true;
-  document.getElementById('progresoNombre').textContent = archivo.name;
-  pintarProgreso(5, 'Leyendo archivo local…');
-
+  cargaArchivoEnCurso = true;
   try {
+    const huella = await huellaArchivo(archivo);
+    const historialExistente = await DB.listarHistorial();
+    const duplicado = historialExistente.find(item => item.huella === huella);
+    if (duplicado && !window.confirm(`Este archivo ya fue cargado el ${fechaHora(duplicado.recibidoEn)}. ¿Deseas guardarlo como una nueva versión histórica?`)) {
+      return;
+    }
+
+    document.getElementById('confirmacion').hidden = true;
+    document.getElementById('progresoNombre').textContent = archivo.name;
+    pintarProgreso(5, 'Leyendo archivo local…');
+
     const resultado = await Pipeline.procesarArchivo(archivo, (pct, msg) => {
       pintarProgreso(pct, msg);
     });
 
+    const idUnico = (window.crypto && typeof window.crypto.randomUUID === 'function')
+      ? `ing-${window.crypto.randomUUID()}`
+      : `ing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     const registroCola = {
-      id: 'ing-' + Date.now(),
+      id: idUnico,
       archivo: archivo.name,
       bytes: archivo.size,
       bytesLegibles: etiquetaBytes(archivo.size),
@@ -1847,38 +1903,52 @@ async function enviarArchivo(archivo) {
       ...resumenSnapshot(resultado.filas, resultado.meta),
     };
 
-    await DB.guardarCarga({
+    const guardado = await DB.guardarCarga({
       filas: resultado.filas,
       meta: resultado.meta,
       registroCola,
     });
     if (document.getElementById('historialEvolucionCifrado')) await cargarHistorial();
 
-    pintarProgreso(100, `¡Listo! ${num(resultado.meta.filas)} registros limpios guardados en tu Base de Datos Local.`);
+    const textoProgreso = guardado?.concatenado
+      ? `¡Listo! Se agregaron ${num(guardado.filasAgregadas)} registros (total acumulado: ${num(guardado.totalFilas)}).`
+      : `¡Listo! ${num(resultado.meta.filas)} registros limpios guardados en tu Base de Datos Local.`;
+    const textoConfirmacion = guardado?.concatenado
+      ? `${num(resultado.meta.filas)} filas y ${resultado.meta.columnas.length} columnas procesadas y concatenadas (total acumulado: ${num(guardado.totalFilas)} registros).`
+      : `${num(resultado.meta.filas)} filas y ${resultado.meta.columnas.length} columnas procesadas con el pipeline de limpieza.`;
+    const textoAviso = guardado?.concatenado
+      ? `Se agregaron ${num(guardado.filasAgregadas)} registros desde ${archivo.name} (total: ${num(guardado.totalFilas)}).`
+      : `Se cargaron ${num(resultado.meta.filas)} registros limpios desde ${archivo.name}.`;
+
+    pintarProgreso(100, textoProgreso);
     mostrarConfirmacion({
       archivo: archivo.name,
       bytesLegibles: etiquetaBytes(archivo.size),
       recibidoEn: registroCola.recibidoEn,
       status: 'procesado',
-      mensaje: `${num(resultado.meta.filas)} filas y ${resultado.meta.columnas.length} columnas procesadas con el pipeline de Python.`,
+      mensaje: textoConfirmacion,
       avisos: resultado.meta.avisos || [],
     });
 
     avisar(
       'Base de Datos Actualizada',
-      `Se cargaron ${num(resultado.meta.filas)} registros limpios desde ${archivo.name}.`,
+      textoAviso,
       'exito'
     );
     anadirNotificacion(
       'exito',
-      'Pipeline Python completado',
-      `${archivo.name}: ${num(resultado.meta.filas)} registros guardados en BD local.`
+      'Pipeline de limpieza completado',
+      guardado?.concatenado
+        ? `${archivo.name}: +${num(guardado.filasAgregadas)} registros concatenados (total: ${num(guardado.totalFilas)}).`
+        : `${archivo.name}: ${num(resultado.meta.filas)} registros guardados en BD local.`
     );
 
     refrescarTodo();
   } catch (err) {
     pintarProgreso(100, err.message || 'Error al procesar el archivo.', true);
     avisar('Error en el pipeline', err.message, 'error');
+  } finally {
+    cargaArchivoEnCurso = false;
   }
 }
 
@@ -1919,7 +1989,7 @@ function conectarCarga() {
     e.preventDefault();
     e.stopPropagation();
     zonaSoltar.classList.add('is-sobre');
-    pintarProgreso(0, 'Suelta el archivo para pasarlo por el pipeline de Python…');
+    pintarProgreso(0, 'Suelta el archivo para pasarlo por el pipeline de limpieza…');
   }));
 
   ['dragleave', 'drop'].forEach((evt) => zonaSoltar.addEventListener(evt, (e) => {
@@ -2215,9 +2285,11 @@ function conectarAjustes() {
   }
   if (btnOlvidePass) {
     btnOlvidePass.addEventListener('click', async () => {
-      if (!confirm('Si olvidaste tu contraseña se borrarán todos los datos locales para que puedas registrar una llave nueva. ¿Deseas continuar?')) return;
+      const frase = window.prompt('Si olvidaste tu contraseña se borrarán todos los datos locales de forma irreversible.\nPara continuar, escribe exactamente: BORRAR BOVEDA');
+      if (frase !== 'BORRAR BOVEDA') return;
       await DB.restablecerFabrica();
       estado.cache = {};
+      invalidarCacheConsultas();
       avisar('Datos borrados', 'Registra una nueva contraseña para comenzar.', 'alerta');
       await mostrarModalBoveda('crear');
     });
@@ -2228,9 +2300,11 @@ function conectarAjustes() {
   const btnRestablecerFabrica = document.getElementById('btnRestablecerFabrica');
   if (btnRestablecerFabrica) {
     btnRestablecerFabrica.addEventListener('click', async () => {
-      if (!confirm('¿Estás seguro de destruir la bóveda cifrada y todos sus datos? Esta acción no se puede deshacer.')) return;
+      const frase = window.prompt('Acción destructiva irreversible.\nPara destruir la bóveda cifrada y todos sus datos, escribe exactamente: BORRAR BOVEDA');
+      if (frase !== 'BORRAR BOVEDA') return;
       await DB.restablecerFabrica();
       estado.cache = {};
+      invalidarCacheConsultas();
       avisar('Bóveda destruida', 'Se han eliminado las sales criptográficas y todos los registros cifrados.', 'alerta');
       await mostrarModalBoveda();
     });
@@ -2462,7 +2536,6 @@ function conectarBoveda() {
         if (pantallaInicio) pantallaInicio.hidden = true;
         app.hidden = false;
         irA((location.hash || '#/dashboard').slice(2), { empujar: false });
-        refrescarTodo();
         comprobarSalud();
       } catch (err) {
         mostrarError(err.message || 'No fue posible autenticar en la bóveda.');
@@ -2476,11 +2549,13 @@ function conectarBoveda() {
   Vault.suscribir(async (evento, detalle) => {
     if (evento === 'LOCKED') {
       estado.cache = {};
+      invalidarCacheConsultas();
       await mostrarModalBoveda('desbloquear');
-      if (detalle === 'INACTIVITY_TIMEOUT') {
+      const razon = typeof detalle === 'object' ? detalle?.razon : detalle;
+      if (razon === 'INACTIVIDAD' || razon === 'INACTIVITY_TIMEOUT') {
         const lapso = config.inactividadMinutos === 60 ? '1 hora' : `${config.inactividadMinutos} minutos`;
         avisar('Sesión bloqueada por inactividad', `La sesión se bloqueó tras ${lapso} sin actividad.`, 'alerta');
-      } else if (detalle === 'MANUAL') {
+      } else if (razon === 'MANUAL') {
         avisar('Sesión cerrada', 'Has salido al inicio y la clave en memoria RAM fue destruida.', 'info');
       }
     }
@@ -2606,11 +2681,51 @@ function reporteActualizarOpcionesContenido() {
   });
 }
 
+const _cacheColumnasFilas = new WeakMap();
+const _cacheMapaColumnas = new WeakMap();
+const _cacheAnalisisFilas = new WeakMap();
+
+function reporteColumnasDeFilas(filas) {
+  if (!Array.isArray(filas) || !filas.length) return [];
+  if (_cacheColumnasFilas.has(filas)) return _cacheColumnasFilas.get(filas);
+  const set = new Set();
+  const limite = Math.min(filas.length, 25);
+  for (let i = 0; i < limite; i++) {
+    const keys = Object.keys(filas[i]);
+    for (let j = 0; j < keys.length; j++) set.add(keys[j]);
+  }
+  const cols = [...set];
+  _cacheColumnasFilas.set(filas, cols);
+  return cols;
+}
+
 function reporteEncontrarColumna(filas, candidatos) {
-  const columnas = [...new Set(filas.flatMap(fila => Object.keys(fila)))];
+  const columnas = reporteColumnasDeFilas(filas);
   return columnas.find(col => candidatos.some(c => reporteClave(col) === reporteClave(c)))
     || columnas.find(col => candidatos.some(c => reporteClave(col).includes(reporteClave(c))))
     || '';
+}
+
+function reporteDetectarColumnas(filas) {
+  if (Array.isArray(filas) && _cacheMapaColumnas.has(filas)) {
+    return _cacheMapaColumnas.get(filas);
+  }
+  const mapa = {
+    id: reporteEncontrarColumna(filas, ['equipo_id', 'id_equipo', 'device_id', 'hostname', 'nombre_equipo']),
+    cifrado: reporteEncontrarColumna(filas, ['estado_de_cifrado', 'estado_cifrado', 'encryption_status', 'encryption_context', 'finding_status']),
+    cumplimiento: reporteEncontrarColumna(filas, ['estado_de_cumplimiento', 'cumplimiento', 'compliance', 'compliant']),
+    region: reporteEncontrarColumna(filas, ['region', 'región', 'continent', 'continente']),
+    pais: reporteEncontrarColumna(filas, ['pais', 'país', 'country']),
+    familiaSO: reporteEncontrarColumna(filas, ['familia_so']),
+    sistema: reporteEncontrarColumna(filas, ['sistema_operativo', 'sistema operativo', 'os', 'os_name']),
+    version: reporteEncontrarColumna(filas, ['version_so', 'versión so', 'version_os', 'os_version']),
+    mdm: reporteEncontrarColumna(filas, ['en_mdm', 'en_mdm_bool', 'mdm']),
+    ad: reporteEncontrarColumna(filas, ['en_ad', 'en_ad_bool', 'active_directory']),
+    usuario: reporteEncontrarColumna(filas, ['usuario_id', 'usuario', 'usuario_asignado', 'user']),
+    severidad: reporteEncontrarColumna(filas, ['severidad', 'severity', 'prioridad', 'risk_level']),
+  };
+  if (Array.isArray(filas)) _cacheMapaColumnas.set(filas, mapa);
+  return mapa;
 }
 
 function reporteValor(fila, columna) {
@@ -2672,21 +2787,21 @@ function reportePrioridad(fila) {
 }
 
 function reporteValoresDisponibles(tipo) {
-  const analisis = reporteAnalizar(reporteFilas);
   if (tipo === 'campo') {
-    const columnas = [...new Set(reporteFilas.flatMap(fila => Object.keys(fila)))].sort((a, b) => a.localeCompare(b, 'es'));
+    const columnas = [...reporteColumnasDeFilas(reporteFilas)].sort((a, b) => a.localeCompare(b, 'es'));
     const principales = reporteColumnasPrincipalesDisponibles(columnas);
     const principalesSet = new Set(principales);
     return reporteCategoriaCampo === 'principales' ? principales : columnas.filter(columna => !principalesSet.has(columna));
   }
-  if (tipo === 'region') return reporteFilas.map(fila => reporteValor(fila, analisis.columnas.region));
+  const columnas = reporteDetectarColumnas(reporteFilas);
+  if (tipo === 'region') return reporteFilas.map(fila => reporteValor(fila, columnas.region));
   if (tipo === 'pais') {
     const regiones = reporteSelecciones.region;
     return reporteFilas
-      .filter(fila => !regiones.size || regiones.has(reporteValor(fila, analisis.columnas.region)))
-      .map(fila => reporteValor(fila, analisis.columnas.pais));
+      .filter(fila => !regiones.size || regiones.has(reporteValor(fila, columnas.region)))
+      .map(fila => reporteValor(fila, columnas.pais));
   }
-  if (tipo === 'sistema') return reporteFilas.map(fila => reporteNombreSO(fila, analisis.columnas));
+  if (tipo === 'sistema') return reporteFilas.map(fila => reporteNombreSO(fila, columnas));
   return ['protegido', 'parcial', 'sin_cifrar', 'desconocido'];
 }
 
@@ -2892,20 +3007,10 @@ function reporteConfigurarMultiselect() {
 }
 
 function reporteAnalizar(filas) {
-  const columnas = {
-    id: reporteEncontrarColumna(filas, ['equipo_id', 'id_equipo', 'device_id', 'hostname', 'nombre_equipo']),
-    cifrado: reporteEncontrarColumna(filas, ['estado_de_cifrado', 'estado_cifrado', 'encryption_status', 'encryption_context', 'finding_status']),
-    cumplimiento: reporteEncontrarColumna(filas, ['estado_de_cumplimiento', 'cumplimiento', 'compliance', 'compliant']),
-    region: reporteEncontrarColumna(filas, ['region', 'región', 'continent', 'continente']),
-    pais: reporteEncontrarColumna(filas, ['pais', 'país', 'country']),
-    familiaSO: reporteEncontrarColumna(filas, ['familia_so']),
-    sistema: reporteEncontrarColumna(filas, ['sistema_operativo', 'sistema operativo', 'os', 'os_name']),
-    version: reporteEncontrarColumna(filas, ['version_so', 'versión so', 'version_os', 'os_version']),
-    mdm: reporteEncontrarColumna(filas, ['en_mdm', 'en_mdm_bool', 'mdm']),
-    ad: reporteEncontrarColumna(filas, ['en_ad', 'en_ad_bool', 'active_directory']),
-    usuario: reporteEncontrarColumna(filas, ['usuario_id', 'usuario', 'usuario_asignado', 'user']),
-    severidad: reporteEncontrarColumna(filas, ['severidad', 'severity', 'prioridad', 'risk_level']),
-  };
+  if (Array.isArray(filas) && _cacheAnalisisFilas.has(filas)) {
+    return _cacheAnalisisFilas.get(filas);
+  }
+  const columnas = reporteDetectarColumnas(filas);
 
   const resumen = reporteConteos(filas, columnas);
   const paises = reporteAgrupar(filas, columnas, 'pais', true);
@@ -2933,12 +3038,14 @@ function reporteAnalizar(filas) {
     ['Versión', columnas.version], ['Región', columnas.region], ['País', columnas.pais], ['Cumplimiento', columnas.cumplimiento]
   ].filter(([, columna]) => Boolean(columna));
 
-  return {
+  const resultadoAnalisis = {
     filas, columnas, resumen, paises, regiones, sistemas, paisesConRiesgo, mismatches, severidades,
     camposGestion, sinMdm, sinAd, atencion, camposDetalle,
     fechaGeneracion: new Date().toLocaleString('es-MX'),
     fechaCorte: reporteMeta?.procesado_en ? fechaHora(reporteMeta.procesado_en) : 'No disponible',
   };
+  if (Array.isArray(filas)) _cacheAnalisisFilas.set(filas, resultadoAnalisis);
+  return resultadoAnalisis;
 }
 
 function reporteFiltrosActuales() {
@@ -2980,7 +3087,7 @@ function reporteTextoFiltrosValores(columnas) {
 
 function reporteFiltrarFilas(filas) {
   const filtrosReporte = reporteFiltrosActuales();
-  const columnas = reporteAnalizar(filas).columnas;
+  const columnas = reporteDetectarColumnas(filas);
   return filas.filter(fila => {
     if (filtrosReporte.region.length && !filtrosReporte.region.includes(reporteValor(fila, columnas.region))) return false;
     if (filtrosReporte.pais.length && !filtrosReporte.pais.includes(reporteValor(fila, columnas.pais))) return false;
@@ -3188,11 +3295,21 @@ function reporteBloqueGeografia(analisis) {
   return `<section class="reporte-bloque reporte-bloque--ancho"><h3>Cifrado por país y región</h3>${reporteTabla(['País', 'Total', 'Sin cifrar', '% sin cifrar', 'Prioridad'], paisRows)}<h4 class="reporte-subtitulo">Distribución por región</h4>${reporteTabla(['Región', 'Total', 'Cifrados', 'Sin cifrar', '% cifrado'], regionRows)}</section>`;
 }
 
+function reporteHayFiltrosActivos() {
+  const f = reporteFiltrosActuales();
+  return Boolean(
+    f.region.length || f.pais.length || f.sistema.length ||
+    f.estado.length || f.buscar || f.campo.some((c) => f.valores.get(c)?.size)
+  );
+}
+
 function reporteGraficaEvolucion() {
+  const conFiltros = reporteHayFiltrosActivos();
   const puntos = reporteCargasHistoricas
     .filter(carga => Array.isArray(carga.filas) && carga.filas.length)
     .map(carga => {
-      const analisis = reporteAnalizar(reporteFiltrarFilas(carga.filas));
+      const filasObjetivo = conFiltros ? reporteFiltrarFilas(carga.filas) : carga.filas;
+      const analisis = reporteAnalizar(filasObjetivo);
       const fecha = carga.fechaCorte || carga.meta?.fecha_corte || carga.recibidoEn;
       return { fecha, analisis };
     })
@@ -3237,22 +3354,6 @@ function renderReporteEjecutivo(analisis, paraPDF = false) {
   const encabezado = `<div class="reporte-resumen-cabecera"><div><h3>Reporte ejecutivo</h3><p>Resumen para toma de decisiones de FEMSA.</p></div></div>${reporteMetadatos(analisis)}`;
   const kpis = reporteContenidoActivo('resumen') ? `<div class="reporte-kpis"><div class="reporte-kpi"><strong>${r.total.toLocaleString('es-MX')}</strong><span>Equipos analizados</span></div><div class="reporte-kpi reporte-kpi--bueno"><strong>${r.protegido.toLocaleString('es-MX')} · ${reportePorcentaje(r.protegido, r.total)}</strong><span>Equipos cifrados</span></div><div class="reporte-kpi reporte-kpi--riesgo"><strong>${r.sin_cifrar.toLocaleString('es-MX')} · ${reportePorcentaje(r.sin_cifrar, r.total)}</strong><span>Equipos sin cifrar</span></div><div class="reporte-kpi"><strong>${(r.parcial + r.desconocido).toLocaleString('es-MX')}</strong><span>Parciales o sin información</span></div></div>` : '';
   return `${encabezado}${kpis}<div class="reporte-bloques">${bloques.join('')}</div>`;
-}
-
-function renderReporteComparativoBase(comparacion) {
-  if (!comparacion) return '<p class="reporte-vacio">Selecciona dos cargas históricas para generar el comparativo.</p>';
-  const a = comparacion.inicial;
-  const b = comparacion.final;
-  const cambio = (valor, menorEsMejor = false) => {
-    const mejora = menorEsMejor ? valor <= 0 : valor >= 0;
-    return `<span class="${mejora ? 'comparacion-mejora' : 'comparacion-riesgo'}">${valor > 0 ? '↑ +' : valor < 0 ? '↓ ' : '→ '}${valor.toLocaleString('es-MX')}</span>`;
-  };
-  const sistemas = b.sistemas.map(sistema => {
-    const anterior = a.sistemas.find(item => item.nombre === sistema.nombre);
-    const pp = anterior ? sistema.protegido / Math.max(1, sistema.total) * 100 - anterior.protegido / Math.max(1, anterior.total) * 100 : null;
-    return [reporteEsc(sistema.nombre), `${reportePorcentaje(sistema.protegido, sistema.total)} · ${num(sistema.total)}`, pp == null ? 'Información no disponible' : cambio(Number(pp.toFixed(1)))];
-  });
-  return `<div class="reporte-resumen-cabecera"><div><h3>Reporte comparativo</h3><p>Evolución entre dos cargas históricas seleccionadas.</p></div></div><div class="reporte-metadatos"><span><strong>Periodo inicial:</strong> ${reporteEsc(a.archivo || 'Sin nombre')}</span><span><strong>Periodo final:</strong> ${reporteEsc(b.archivo || 'Sin nombre')}</span><span><strong>Filtros:</strong> Se aplican los filtros seleccionados</span></div><div class="reporte-kpis"><div class="reporte-kpi"><strong>${cambio(b.total - a.total)}</strong><span>Cambio en equipos totales</span></div><div class="reporte-kpi reporte-kpi--bueno"><strong>${cambio(b.protegido - a.protegido)}</strong><span>Cambio en equipos cifrados</span></div><div class="reporte-kpi reporte-kpi--riesgo"><strong>${cambio(b.sin_cifrar - a.sin_cifrar, true)}</strong><span>Cambio en equipos sin cifrar</span></div><div class="reporte-kpi"><strong>${cambio(Number((b.protegido / Math.max(1, b.total) * 100 - a.protegido / Math.max(1, a.total) * 100).toFixed(1)))}</strong><span>Cambio de cobertura (pp)</span></div></div><div class="reporte-bloques"><section class="reporte-bloque reporte-bloque--ancho"><h3>Cambios por sistema operativo</h3>${reporteTabla(['Sistema operativo', 'Periodo final', 'Cambio de cobertura'], sistemas)}</section><section class="reporte-bloque reporte-bloque--ancho"><h3>Conclusiones</h3><ul class="reporte-lista"><li>La carga final contiene ${num(b.total)} equipos frente a ${num(a.total)} en la inicial.</li><li>La cobertura pasó de ${reportePorcentaje(a.protegido, a.total)} a ${reportePorcentaje(b.protegido, b.total)}.</li><li>${b.sin_cifrar <= a.sin_cifrar ? 'Los equipos sin cifrar disminuyeron o se mantuvieron.' : 'Los equipos sin cifrar aumentaron y requieren revisión prioritaria.'}</li></ul></section></div>`;
 }
 
 function renderReporteComparativo(comparacion) {
@@ -3442,7 +3543,7 @@ async function cargarReportesFuente() {
 }
 
 async function cargarReportes() {
-  reporteCargasHistoricas = (await DB.listarHistorial()).filter(carga => carga.esSnapshot && Array.isArray(carga.filas) && carga.filas.length);
+  reporteCargasHistoricas = (await DB.listarHistorial({ incluirFilas: true })).filter(carga => carga.esSnapshot && Array.isArray(carga.filas) && carga.filas.length);
   reporteActualizarFuentes();
   await cargarReportesFuente();
 }
@@ -3500,288 +3601,5 @@ function descargarReportePDF(tipo) {
   ventana.addEventListener('load', imprimir, { once: true });
   setTimeout(imprimir, 900);
 }
-
-/*function descargarReportePDF() {
-  if (!reporteFiltradas.length) {
-    alert('No hay registros para exportar.');
-    return;
-  }
-
-  const columnas = [...new Set(
-    reporteFiltradas.flatMap(f => Object.keys(f))
-  )];
-
-  const escapar = v => reporteTexto(v)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-
-  const filas = reporteFiltradas.map(f =>
-    '<tr>' + columnas.map(c =>
-      `<td>${escapar(f[c])}</td>`
-    ).join('') + '</tr>'
-  ).join('');
-
-  const filtros = [
-    `Columna: ${reporteEl('reporteCampo').value || 'Todas'}`,
-    `Valor: ${reporteEl('reporteValor').value || 'Todos'}`,
-    `Estado: ${reporteEl('reporteEstado').value || 'Todos'}`,
-    `Búsqueda: ${reporteEl('reporteBuscar').value || 'Ninguna'}`
-  ].join(' | ');
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Reporte CifraControl</title>
-<style>
-@page { size: A4 landscape; margin: 12mm; }
-body { font-family: Arial, sans-serif; color: #26344f; }
-h1 { color: #7562e8; }
-p { color: #65748e; }
-table { width: 100%; border-collapse: collapse; font-size: 9px; }
-th, td { border: 1px solid #ddd; padding: 6px; overflow-wrap: anywhere; }
-th { background: #e9e6ff; }
-thead { display: table-header-group; }
-tr { break-inside: avoid; }
-</style>
-</head>
-<body>
-<h1>CifraControl - Reporte personalizado</h1>
-<p>Fecha: ${escapar(new Date().toLocaleString('es-MX'))}</p>
-<p>Registros: ${reporteFiltradas.length}</p>
-<p>Filtros: ${escapar(filtros)}</p>
-<table>
-<thead><tr>${columnas.map(c => `<th>${escapar(c)}</th>`).join('')}</tr></thead>
-<tbody>${filas}</tbody>
-</table>
-</body>
-</html>`;
-
-  const ventana = window.open('', '_blank');
-
-  if (!ventana) {
-    alert('Permite las ventanas emergentes para exportar.');
-    return;
-  }
-
-  ventana.document.open();
-  ventana.document.write(html);
-  ventana.document.close();
-  ventana.focus();
-  ventana.print();
-}
-*/
-
-function descargarReportePDFLegacy() {
-  if (!reporteFiltradas.length) {
-    alert('No hay registros para exportar.');
-    return;
-  }
-
-  const registros = reporteFiltradas;
-  const texto = v => String(reporteTexto(v) ?? '').trim();
-  const escapar = v => texto(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  const normalizar = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z0-9]/g, '');
-  const columnas = [...new Set(registros.flatMap(f => Object.keys(f)))];
-  const encontrar = (...nombres) => columnas.find(c => nombres.some(n => normalizar(c) === normalizar(n)))
-    || columnas.find(c => nombres.some(n => normalizar(c).includes(normalizar(n))));
-  const campo = (fila, col) => col ? texto(fila[col]) : '';
-  const colId = encontrar('equipo_id', 'id_equipo', 'device_id', 'hostname', 'nombre_equipo');
-  const colSO = encontrar('sistema_operativo', 'sistema operativo', 'os', 'os_name');
-  const colVersion = encontrar('version_so', 'version_os', 'os_version');
-  const colCifrado = encontrar('estado_de_cifrado', 'estado_cifrado', 'encryption_status', 'estado cifrado');
-  const colRegion = encontrar('region', 'región');
-  const colPais = encontrar('pais', 'país', 'country');
-  const colUsuario = encontrar('usuario', 'user', 'usuario_asignado');
-  const colCumplimiento = encontrar('cumplimiento', 'compliance', 'compliant');
-
-  const clasificar = fila => {
-    const estado = normalizar(campo(fila, colCifrado));
-    if (!estado || ['nodisponible', 'sindato', 'sindatos', 'unknown', 'na', 'null', 'undefined', 'notavailable'].includes(estado)) return 'Sin datos';
-    if (['encrypted', 'cifrado', 'cifrada', 'protegido', 'protected', 'fullyencrypted', 'true', 'si', 'yes'].includes(estado)) return 'Cifrado';
-    if (['unencrypted', 'notencrypted', 'sincifrar', 'nocifrado', 'nocifrada', 'unprotected', 'false', 'no', 'decrypted'].includes(estado)) return 'Sin cifrar';
-    return 'Sin datos';
-  };
-
-  const conteo = lista => ({
-    total: lista.length,
-    cifrados: lista.filter(f => clasificar(f) === 'Cifrado').length,
-    sinCifrar: lista.filter(f => clasificar(f) === 'Sin cifrar').length,
-    sinDatos: lista.filter(f => clasificar(f) === 'Sin datos').length
-  });
-
-  const resumen = conteo(registros);
-  const porcentaje = (n, total = resumen.total) => total ? (100 * n / total).toFixed(1) + '%' : '0.0%';
-  const numero = n => n.toLocaleString('es-MX');
-
-  const agrupar = col => {
-    const grupos = new Map();
-    registros.forEach(f => {
-      const clave = campo(f, col) || 'No disponible';
-      if (!grupos.has(clave)) grupos.set(clave, []);
-      grupos.get(clave).push(f);
-    });
-    return [...grupos.entries()].sort((a, b) => b[1].length - a[1].length);
-  };
-
-  const tablaAgrupada = (titulo, col) => {
-    if (!col) return '';
-    const filas = agrupar(col).map(([nombre, lista]) => {
-      const c = conteo(lista);
-      return `<tr><td>${escapar(nombre)}</td><td class="num">${numero(c.total)}</td><td class="num">${numero(c.cifrados)}</td><td class="num">${numero(c.sinCifrar)}</td><td class="num">${numero(c.sinDatos)}</td><td class="num">${porcentaje(c.cifrados, c.total)}</td></tr>`;
-    }).join('');
-
-    return `<section class="seccion"><h2>${titulo}</h2><table><thead><tr><th>${escapar(col.replaceAll('_', ' '))}</th><th>Equipos</th><th>Cifrados</th><th>Sin cifrar</th><th>Sin datos</th><th>% cifrado</th></tr></thead><tbody>${filas}<tr class="total"><td>Total</td><td class="num">${numero(resumen.total)}</td><td class="num">${numero(resumen.cifrados)}</td><td class="num">${numero(resumen.sinCifrar)}</td><td class="num">${numero(resumen.sinDatos)}</td><td class="num">${porcentaje(resumen.cifrados)}</td></tr></tbody></table></section>`;
-  };
-
-  const detalleCols = [
-    ['Equipo', colId],
-    ['Sistema operativo', colSO],
-    ['Versión', colVersion],
-    ['Estado de cifrado', colCifrado],
-    ['Región', colRegion],
-    ['País', colPais],
-    ['Usuario', colUsuario],
-    ['Cumplimiento', colCumplimiento]
-  ].filter(([, col]) => !!col);
-
-  const detalle = detalleCols.length
-    ? `<section class="seccion detalle">
-        <h2>Detalle de equipos (${numero(registros.length)})</h2>
-        <table>
-          <thead><tr>${detalleCols.map(([nombre]) => `<th>${escapar(nombre)}</th>`).join('')}</tr></thead>
-          <tbody>${registros.map(f => `<tr>${detalleCols.map(([, col]) => `<td>${escapar(campo(f, col) || '—')}</td>`).join('')}</tr>`).join('')}</tbody>
-        </table>
-      </section>`
-    : '';
-
-  const filtros = [
-    ['Columna', reporteEl('reporteCampo')?.value || 'Todas'],
-    ['Valor', reporteEl('reporteValor')?.value || 'Todos'],
-    ['Estado', reporteEl('reporteEstado')?.value || 'Todos'],
-    ['Búsqueda', reporteEl('reporteBuscar')?.value || 'Ninguna']
-  ].map(([k, v]) => `<strong>${escapar(k)}:</strong> ${escapar(v)}`).join(' · ');
-
-  const fecha = new Date().toLocaleString('es-MX');
-
-  const html = `<!doctype html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Reporte CifraControl</title>
-<style>
-  @page { size: A4 portrait; margin: 16mm 13mm 17mm; }
-  * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #24344c; font-size: 10px; line-height: 1.45; margin: 0; }
-  .cabecera { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #263c58; padding-bottom: 13px; margin-bottom: 16px; }
-  .eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 1.1px; color: #667085; }
-  h1 { font-size: 21px; line-height: 1.2; margin: 6px 0 10px; color: #233951; }
-  .meta { color: #647084; font-size: 10px; }
-  .confidencial { border: 1px solid #a63d46; color: #a63d46; border-radius: 4px; padding: 5px 8px; font-size: 9px; font-weight: bold; letter-spacing: .7px; }
-  .filtros { padding: 11px 12px; background: #f3f5f8; border: 1px solid #e3e7ed; border-radius: 5px; margin-bottom: 20px; }
-  .filtros strong { color: #293b52; }
-  .seccion { margin: 0 0 21px; break-inside: auto; }
-  h2 { font-size: 13px; color: #253b55; margin: 0 0 9px; break-after: avoid; }
-  .indicadores { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #e0e5eb; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
-  .indicador { padding: 12px 10px; border-right: 1px solid #e0e5eb; }
-  .indicador:last-child { border-right: 0; }
-  .indicador .etiqueta { color: #687487; font-size: 9px; }
-  .indicador .valor { font-size: 22px; font-weight: bold; color: #253b55; }
-  .indicador .valor.rojo { color: #b03a43; }
-  .indicador .valor.gris { color: #707986; }
-  .indicador .porcentaje { color: #687487; }
-  .barra { display: flex; height: 8px; overflow: hidden; border-radius: 3px; margin: 10px 0; background: #e0e4e9; }
-  .barra span { display: block; height: 100%; }
-  .resumen-texto { margin: 8px 0 0; color: #526174; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9px; }
-  th { background: #eef1f5; color: #27384d; font-weight: 700; text-align: left; }
-  th, td { padding: 7px 6px; border-bottom: 1px solid #e4e8ed; overflow-wrap: break-word; word-break: normal; vertical-align: top; }
-  td.num { text-align: right; white-space: nowrap; }
-  tr.total { font-weight: bold; border-top: 1px solid #9ba6b6; }
-  thead { display: table-header-group; }
-  tr { break-inside: avoid; page-break-inside: avoid; }
-  .detalle { break-before: page; }
-  .detalle table { font-size: 8px; }
-  .detalle th, .detalle td { padding: 6px 4px; }
-  .pie { margin-top: 24px; border-top: 1px solid #d9dfe6; padding-top: 9px; font-size: 9px; color: #667085; }
-  @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-</style>
-</head>
-<body>
-  <header class="cabecera">
-    <div>
-      <div class="eyebrow">PANEL DE CIFRADO DE DISCOS · REPORTE</div>
-      <h1>Estado de cifrado de discos duros</h1>
-      <div class="meta">Generado: ${escapar(fecha)} · Equipos en el reporte: ${numero(resumen.total)}</div>
-    </div>
-    <div class="confidencial">CONFIDENCIAL</div>
-  </header>
-
-  <div class="filtros">
-    <strong>Filtros aplicados</strong>
-    <div>${filtros}</div>
-  </div>
-
-  <section class="seccion">
-    <h2>1. Resumen</h2>
-    <div class="indicadores">
-      <div class="indicador"><div class="etiqueta">Total de equipos</div><div class="valor">${numero(resumen.total)}</div><div class="porcentaje">100.0%</div></div>
-      <div class="indicador"><div class="etiqueta">Cifrados</div><div class="valor">${numero(resumen.cifrados)}</div><div class="porcentaje">${porcentaje(resumen.cifrados)}</div></div>
-      <div class="indicador"><div class="etiqueta">Sin cifrar</div><div class="valor rojo">${numero(resumen.sinCifrar)}</div><div class="porcentaje">${porcentaje(resumen.sinCifrar)}</div></div>
-      <div class="indicador"><div class="etiqueta">Sin datos</div><div class="valor gris">${numero(resumen.sinDatos)}</div><div class="porcentaje">${porcentaje(resumen.sinDatos)}</div></div>
-    </div>
-
-    <div class="barra">
-      <span style="width:${100 * resumen.cifrados / resumen.total}%;background:#263c58"></span>
-      <span style="width:${100 * resumen.sinCifrar / resumen.total}%;background:#b03a43"></span>
-      <span style="width:${100 * resumen.sinDatos / resumen.total}%;background:#aeb6c1"></span>
-    </div>
-
-    <p class="resumen-texto">
-      De ${numero(resumen.total)} equipos incluidos, ${numero(resumen.cifrados)} están cifrados
-      (${porcentaje(resumen.cifrados)}), ${numero(resumen.sinCifrar)} están sin cifrar
-      (${porcentaje(resumen.sinCifrar)}) y ${numero(resumen.sinDatos)} no tienen un estado de
-      cifrado reconocido (${porcentaje(resumen.sinDatos)}).
-    </p>
-  </section>
-
-  ${tablaAgrupada('2. Estado por región', colRegion)}
-  ${tablaAgrupada('3. Estado por sistema operativo', colSO)}
-  ${tablaAgrupada('4. Estado por país', colPais)}
-  ${detalle}
-
-  <footer class="pie">
-    CifraControl · Confidencial · Uso interno · Reporte generado con los filtros seleccionados
-  </footer>
-</body>
-</html>`;
-
-  const ventana = window.open('', '_blank');
-  if (!ventana) {
-    alert('Permite las ventanas emergentes para exportar.');
-    return;
-  }
-
-  ventana.document.open();
-  ventana.document.write(html);
-  ventana.document.close();
-  ventana.focus();
-
-  let impreso = false;
-  const imprimir = () => {
-    if (impreso || ventana.closed) return;
-    impreso = true;
-    ventana.focus();
-    ventana.print();
-  };
-
-  ventana.addEventListener('load', imprimir, { once: true });
-  setTimeout(imprimir, 900);
-}
-
 
 document.addEventListener('DOMContentLoaded', iniciar);

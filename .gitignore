@@ -1,5 +1,13 @@
-# Archivos de ingesta Excel: los recibe el servidor, no se versionan.
-# Su estado vive en el almacén (pending_processing) y lo gestiona el worker.
-uploads/Los archivos *.xlsx / *.xls / *.csv son datos de clientes: nunca deben subirse al repositorio.
-uploads/
+# Archivos de sistema y herramientas locales
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.graphifyignore
+graphify-out/
 node_modules/
+
+# Archivos de ingesta de clientes (nunca deben subirse al repositorio)
+uploads/
+data/
+*.enc.json

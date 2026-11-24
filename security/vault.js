@@ -13,7 +13,8 @@
 const Vault = (() => {
   const TESTIGO_CANARY = 'FEMSA_ZERO_KNOWLEDGE_CANARY_V1';
   const STORE_META = '__vault_meta__';
-  const CLAVE_LICENCIA_ADMIN = 'FEMSA-ADMIN-2026';
+  const SALT_LICENCIA_ADMIN = 'FEMSA_ADMIN_SALT_V1::';
+  const HASH_LICENCIA_ADMIN = 'b935b519622f5f480997a6dded052964a983a9349f819ddbe7f33a2812e1f319';
 
   /** Clave maestra y rol activos: sólo viven en esta clausura privada en memoria RAM. */
   let claveActivaRAM = null;
@@ -22,6 +23,7 @@ const Vault = (() => {
   let inactividadActiva = true;
   let inactividadMs = 15 * 60 * 1000; // 15 minutos por defecto
   let intentosFallidos = 0;
+  let desbloqueandoEnCurso = false;
   const suscriptores = new Set();
 
   function estaDesbloqueada() {
@@ -132,7 +134,8 @@ const Vault = (() => {
     const rolSolicitado = opciones.rol === 'admin' ? 'admin' : 'operador';
     if (rolSolicitado === 'admin') {
       const pinIngresado = String(opciones.claveAdmin || '').trim().toUpperCase();
-      if (pinIngresado !== CLAVE_LICENCIA_ADMIN) {
+      const hashIngresado = await CryptoEngine.hashSHA256Hex(SALT_LICENCIA_ADMIN + pinIngresado);
+      if (hashIngresado !== HASH_LICENCIA_ADMIN) {
         throw new Error('Clave de administrador incorrecta.');
       }
     }
@@ -176,48 +179,89 @@ const Vault = (() => {
    * Lee el salt de IndexedDB, deriva la clave candidata y verifica si logra descifrar
    * y autenticar el payload testigo (authTag).
    */
+  async function actualizarEstadoIntentos(db, config, fallos, lockoutUntil) {
+    if (!config) return;
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_META], 'readwrite');
+      tx.objectStore(STORE_META).put({
+        ...config,
+        id: 'config',
+        failedAttempts: fallos,
+        lockoutUntil: lockoutUntil || 0,
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  }
+
   async function desbloquear(db, password) {
     if (!password) throw new Error('Introduce tu contraseña maestra.');
-
-    // Mitigación contra fuerza bruta: retardo acumulativo tras intentos fallidos
-    if (intentosFallidos > 0) {
-      const esperaMs = Math.min(4000, intentosFallidos * 450);
-      await new Promise((r) => setTimeout(r, esperaMs));
+    if (desbloqueandoEnCurso) {
+      throw new Error('Verificación en curso. Espera un momento.');
     }
 
-    const config = await obtenerMetaBoveda(db);
-    if (!config) {
-      throw new Error('NO_VAULT_FOUND');
-    }
-
-    const candidateKey = await CryptoEngine.derivarClaveMaestra(password, config.salt);
-    let rolDescifrado = 'operador';
-
+    desbloqueandoEnCurso = true;
     try {
-      const testigoDescifrado = await CryptoEngine.descifrarPayload(
-        candidateKey,
-        config.authIv,
-        config.authTag
-      );
-
-      if (!testigoDescifrado || testigoDescifrado.canary !== TESTIGO_CANARY) {
-        throw new Error('CANARY_MISMATCH');
+      const config = await obtenerMetaBoveda(db);
+      if (!config) {
+        throw new Error('NO_VAULT_FOUND');
       }
-      rolDescifrado = testigoDescifrado.rol === 'admin' ? 'admin' : 'operador';
-    } catch {
-      intentosFallidos++;
-      const err = new Error('Contraseña incorrecta.');
-      err.code = 'INVALID_PASSWORD';
-      err.intentos = intentosFallidos;
-      throw err;
-    }
 
-    intentosFallidos = 0;
-    claveActivaRAM = candidateKey;
-    rolActivoRAM = rolDescifrado;
-    reiniciarTimerInactividad();
-    notificar('UNLOCKED', { recienCreada: false, rol: rolActivoRAM });
-    return true;
+      const fallosPersistidos = Math.max(intentosFallidos, Number(config.failedAttempts) || 0);
+      const bloqueoHasta = Number(config.lockoutUntil) || 0;
+      const ahora = Date.now();
+      if (bloqueoHasta > ahora) {
+        const segs = Math.ceil((bloqueoHasta - ahora) / 1000);
+        throw new Error(`Demasiados intentos fallidos. Espera ${segs} s antes de volver a intentar.`);
+      }
+
+      if (fallosPersistidos > 0) {
+        const esperaMs = Math.min(4000, fallosPersistidos * 450);
+        await new Promise((r) => setTimeout(r, esperaMs));
+      }
+
+      const candidateKey = await CryptoEngine.derivarClaveMaestra(
+        password,
+        config.salt,
+        config.iterations || CryptoEngine.PBKDF2_ITERATIONS
+      );
+      let rolDescifrado = 'operador';
+
+      try {
+        const testigoDescifrado = await CryptoEngine.descifrarPayload(
+          candidateKey,
+          config.authIv,
+          config.authTag
+        );
+
+        if (!testigoDescifrado || testigoDescifrado.canary !== TESTIGO_CANARY) {
+          throw new Error('CANARY_MISMATCH');
+        }
+        rolDescifrado = testigoDescifrado.rol === 'admin' ? 'admin' : 'operador';
+      } catch {
+        intentosFallidos = fallosPersistidos + 1;
+        const nuevoLockout = intentosFallidos >= 5
+          ? Date.now() + Math.min(30000, (intentosFallidos - 4) * 3000)
+          : 0;
+        await actualizarEstadoIntentos(db, config, intentosFallidos, nuevoLockout);
+        const err = new Error('Contraseña incorrecta.');
+        err.code = 'INVALID_PASSWORD';
+        err.intentos = intentosFallidos;
+        throw err;
+      }
+
+      if (fallosPersistidos > 0 || bloqueoHasta > 0) {
+        await actualizarEstadoIntentos(db, config, 0, 0);
+      }
+      intentosFallidos = 0;
+      claveActivaRAM = candidateKey;
+      rolActivoRAM = rolDescifrado;
+      reiniciarTimerInactividad();
+      notificar('UNLOCKED', { recienCreada: false, rol: rolActivoRAM });
+      return true;
+    } finally {
+      desbloqueandoEnCurso = false;
+    }
   }
 
   /**
@@ -245,7 +289,11 @@ const Vault = (() => {
       throw new Error('No hay una bóveda configurada en este equipo.');
     }
 
-    const oldKey = await CryptoEngine.derivarClaveMaestra(passActual, config.salt);
+    const oldKey = await CryptoEngine.derivarClaveMaestra(
+      passActual,
+      config.salt,
+      config.iterations || CryptoEngine.PBKDF2_ITERATIONS
+    );
     let testigoDescifrado;
     try {
       testigoDescifrado = await CryptoEngine.descifrarPayload(
@@ -263,10 +311,6 @@ const Vault = (() => {
     const newSalt = CryptoEngine.generarBytesAleatorios(CryptoEngine.SALT_BYTES);
     const newKey = await CryptoEngine.derivarClaveMaestra(passNueva, newSalt);
 
-    if (typeof onRekeyData === 'function') {
-      await onRekeyData(oldKey, newKey);
-    }
-
     const rol = testigoDescifrado.rol === 'admin' ? 'admin' : 'operador';
     const nuevoTestigo = {
       canary: TESTIGO_CANARY,
@@ -275,19 +319,26 @@ const Vault = (() => {
       rotatedAt: new Date().toISOString(),
     };
     const { iv: newAuthIv, ciphertext: newAuthTag } = await CryptoEngine.cifrarPayload(newKey, nuevoTestigo);
+    const nuevoConfig = {
+      ...config,
+      id: 'config',
+      salt: newSalt,
+      authIv: newAuthIv,
+      authTag: newAuthTag,
+      failedAttempts: 0,
+      lockoutUntil: 0,
+    };
 
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction([STORE_META], 'readwrite');
-      tx.objectStore(STORE_META).put({
-        ...config,
-        id: 'config',
-        salt: newSalt,
-        authIv: newAuthIv,
-        authTag: newAuthTag,
+    if (typeof onRekeyData === 'function') {
+      await onRekeyData(oldKey, newKey, nuevoConfig);
+    } else {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_META], 'readwrite');
+        tx.objectStore(STORE_META).put(nuevoConfig);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(new Error('No se pudo actualizar la configuración de la bóveda.'));
       });
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => reject(new Error('No se pudo actualizar la configuración de la bóveda.'));
-    });
+    }
 
     claveActivaRAM = newKey;
     rolActivoRAM = rol;

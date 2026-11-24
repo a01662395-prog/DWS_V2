@@ -1,7 +1,7 @@
 {
   "name": "FEMSA · CifraControl Security & Inventory",
   "short_name": "FEMSA Cifra",
-  "description": "Plataforma corporativa FEMSA de control de cifrado, inventario tecnológico y pipeline de limpieza en Python local.",
+  "description": "Plataforma corporativa FEMSA de control de cifrado, inventario tecnológico y pipeline de limpieza local en navegador.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#FAFAFA",

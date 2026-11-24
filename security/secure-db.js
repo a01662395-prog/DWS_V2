@@ -12,23 +12,65 @@
 
 const SecureDB = (() => {
   /**
+   * Cifra `data` en memoria RAM con un IV aleatorio único de 12 bytes y devuelve
+   * el registro listo para persistir en un ObjectStore de IndexedDB.
+   */
+  async function prepararRegistroCifrado(keyId, data) {
+    const masterKey = Vault.obtenerClaveActiva();
+    const { iv, ciphertext } = await CryptoEngine.cifrarPayload(masterKey, data);
+    return {
+      id: keyId,
+      iv,
+      ciphertext,
+      encryptedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
    * Cifra `data` con un IV aleatorio de 12 bytes y lo guarda en `storeName` bajo `keyId`.
    */
   async function setEncrypted(db, storeName, keyId, data) {
-    const masterKey = Vault.obtenerClaveActiva();
-    const { iv, ciphertext } = await CryptoEngine.cifrarPayload(masterKey, data);
+    const registro = await prepararRegistroCifrado(keyId, data);
 
     return new Promise((resolve, reject) => {
       const tx = db.transaction([storeName], 'readwrite');
       const store = tx.objectStore(storeName);
-      store.put({
-        id: keyId,
-        iv,
-        ciphertext,
-        encryptedAt: new Date().toISOString(),
-      });
+      store.put(registro);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => reject(new Error(`Error al escribir registro cifrado en ${storeName}.`));
+      tx.onabort = () => reject(new Error(`Transacción abortada al escribir en ${storeName}.`));
+    });
+  }
+
+  /**
+   * Cifra múltiples registros en memoria RAM primero y luego los persiste (junto con
+   * limpiezas opcionales de stores) dentro de UNA SOLA transacción atómica de IndexedDB.
+   * Si cualquier cifrado o escritura falla, la base de datos no queda en estado parcial.
+   */
+  async function escribirTransaccionCifrada(db, { limpiarStores = [], escrituras = [] } = {}) {
+    const preparados = await Promise.all(
+      escrituras.map(async ({ storeName, keyId, data }) => ({
+        storeName,
+        registro: await prepararRegistroCifrado(keyId, data),
+      }))
+    );
+
+    const storesInvolucrados = Array.from(
+      new Set([...limpiarStores, ...preparados.map((p) => p.storeName)])
+    );
+    if (!storesInvolucrados.length) return true;
+
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storesInvolucrados, 'readwrite');
+      for (const storeName of limpiarStores) {
+        tx.objectStore(storeName).clear();
+      }
+      for (const { storeName, registro } of preparados) {
+        tx.objectStore(storeName).put(registro);
+      }
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(new Error('Error en transacción atómica de IndexedDB.'));
+      tx.onabort = () => reject(new Error('Transacción atómica abortada en IndexedDB.'));
     });
   }
 
@@ -81,7 +123,9 @@ const SecureDB = (() => {
   }
 
   return {
+    prepararRegistroCifrado,
     setEncrypted,
+    escribirTransaccionCifrada,
     getDecrypted,
     getAllDecrypted,
   };
