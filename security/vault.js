@@ -19,7 +19,7 @@ const Vault = (() => {
   const AAD_META_CONFIG = '__vault_meta__:config';
   const SALT_LICENCIA_ADMIN_PRE = 'FEMSA_ADMIN_SALT_V1::';
   const SALT_LICENCIA_ADMIN_KDF = 'FEMSA_ADMIN_KDF_V2_SALT_2026';
-  const VERIFICADOR_LICENCIA_ADMIN_PBKDF2 = '40c84c5e5bab578c4d1c8522ce7b0446314b00fab0e23e2acfd92d9c30db929d';
+  const VERIFICADOR_LICENCIA_ADMIN_PBKDF2 = 'c81a9ffcbfc9cb0dae0776bcce46b09dd27c77db678b33cdb81e84d69a9f9f9e';
 
   /** Clave maestra y rol activos: sólo viven en esta clausura privada en memoria RAM. */
   let claveActivaRAM = null;
