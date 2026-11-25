@@ -2768,6 +2768,7 @@ let reporteCargasHistoricas = [];
 let reportePeriodoInicialId = '';
 let reportePeriodoFinalId = '';
 let reporteComparacion = null;
+let reporteComparacionRaw = null;
 const reporteGraficas = new Set(['estado', 'paises', 'sistemas']);
 const reporteContenido = new Set(['resumen', 'geografia', 'estado', 'sistemas', 'mdm', 'ad', 'cumplimiento', 'alertas', 'evolucion', 'comparacion', 'recomendaciones', 'detalle']);
 const reporteSelecciones = {
@@ -2802,6 +2803,7 @@ function reporteContenidoCompatible(clave) {
 }
 
 function reporteActualizarOpcionesContenido() {
+  const esComparativo = reporteFuente === 'comparativo';
   document.querySelectorAll('[data-reporte-contenido]').forEach(casilla => {
     const clave = casilla.dataset.reporteContenido;
     const etiqueta = casilla.closest('label');
@@ -2810,6 +2812,18 @@ function reporteActualizarOpcionesContenido() {
     casilla.checked = compatible && reporteContenido.has(clave);
     if (etiqueta) etiqueta.hidden = !compatible;
   });
+  const graficasBox = document.querySelector('.reporte-graficas-opciones');
+  if (graficasBox) {
+    graficasBox.hidden = esComparativo || reporteTipoActivo !== 'ejecutivo';
+  }
+  const pestanas = document.querySelector('.reporte-pestanas');
+  if (pestanas) pestanas.hidden = esComparativo;
+  const btnEj = reporteEl('reporteEjecutivoPDF');
+  const btnTec = reporteEl('reporteTecnicoPDF');
+  const btnComp = reporteEl('reporteComparativoPDF');
+  if (btnEj) btnEj.disabled = esComparativo;
+  if (btnTec) btnTec.disabled = esComparativo;
+  if (btnComp) btnComp.disabled = !esComparativo;
 }
 
 const _cacheColumnasFilas = new WeakMap();
@@ -3295,10 +3309,6 @@ function reporteMetadatos(analisis) {
   const filtros = reporteFiltrosActuales();
 
   const aplicados = [
-    ['Región', reporteTextoSeleccion(filtros.region, 'Todas')],
-    ['País', reporteTextoSeleccion(filtros.pais, 'Todos')],
-    ['Sistema operativo', reporteTextoSeleccion(filtros.sistema, 'Todos')],
-    ['Estado', reporteTextoSeleccion(filtros.estado, 'Todos')],
     ['Columnas', reporteTextoSeleccionColumnas(filtros.campo)],
     ['Valores', reporteTextoFiltrosValores(filtros.campo)],
     ['Búsqueda', filtros.buscar || 'Ninguna']
@@ -3527,7 +3537,7 @@ function renderReporteTecnico(analisis, paraPDF = false) {
   if (reporteContenidoActivo('evolucion')) bloques.push(`<section class="reporte-bloque reporte-bloque--ancho"><h3>Evolución histórica del cifrado</h3>${reporteGraficaEvolucion()}</section>`);
   if (reporteContenidoActivo('comparacion') && reporteFuente === 'comparativo') bloques.push(reporteBloqueComparacion());
   if (reporteContenidoActivo('recomendaciones')) bloques.push(`<section class="reporte-bloque"><h3>Recomendaciones técnicas</h3><ul class="reporte-lista">${reporteRecomendaciones(analisis).map(recomendacion => `<li>${recomendacion}</li>`).join('')}</ul></section>`);
-  if (reporteContenidoActivo('detalle')) {
+  if (reporteContenidoActivo('detalle') || (paraPDF && reporteTipoActivo !== 'tecnico')) {
     const notaTruncado = !paraPDF && analisis.atencion.length > 100
       ? `<p class="reporte-vacio">Vista previa limitada a 100 equipos; el PDF incluye hasta ${num(MAX_FILAS_PDF_DETALLE)} registros.</p>`
       : (paraPDF && analisis.atencion.length > MAX_FILAS_PDF_DETALLE
@@ -3549,6 +3559,12 @@ function pintarReporte() {
     return;
   }
   if (reporteFuente === 'comparativo') {
+    reporteComparacion = (reporteComparacionRaw?.inicial && reporteComparacionRaw?.final)
+      ? {
+          inicial: reporteAnalizar(reporteFiltrarFilas(reporteComparacionRaw.inicial)),
+          final: reporteAnalizar(reporteFiltrarFilas(reporteComparacionRaw.final)),
+        }
+      : null;
     reporteEl('reporteContador').textContent = reporteComparacion ? 'Comparación histórica lista · actualización automática' : 'Selecciona dos cargas históricas';
     reporteEl('reporteVistaPrevia').innerHTML = reporteContenidoActivo('comparacion') ? renderReporteComparativo(reporteComparacion) : '<div class="reporte-vacio reporte-vacio--seleccion"><strong>Comparación entre periodos desactivada</strong><span>Selecciona esa sección para mostrar el contenido comparativo.</span></div>';
     return;
@@ -3656,15 +3672,18 @@ async function cargarReportesFuente() {
   if (reporteFuente === 'comparativo') {
     const inicial = await DB.obtenerHistorial(reportePeriodoInicialId);
     const final = await DB.obtenerHistorial(reportePeriodoFinalId);
-    reporteComparacion = inicial?.filas && final?.filas ? {
-      inicial: reporteAnalizar(reporteFiltrarFilas(inicial.filas)),
-      final: reporteAnalizar(reporteFiltrarFilas(final.filas)),
-    } : null;
+    reporteComparacionRaw = (inicial?.filas && final?.filas)
+      ? { inicial: inicial.filas, final: final.filas }
+      : null;
     reporteFilas = final?.filas || [];
     reporteMeta = final?.meta || null;
+    reportePoblarColumnas();
+    actualizarFiltrosReporte();
+    reporteActualizarValoresPorColumna();
     pintarReporte();
     return;
   }
+  reporteComparacionRaw = null;
   const datos = reporteFuente === 'historico' && reporteCargaHistoricaId
     ? await DB.obtenerHistorial(reporteCargaHistoricaId)
     : await DB.obtenerActual();
